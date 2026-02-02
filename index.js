@@ -12,8 +12,10 @@ const STEEM_USERNAME = 'tagai'
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 function base58Encode(buffer) {
-  let num = BigInt('0x' + buffer.toString('hex'))
-  if (num === 0n) return '1'
+  const hex = buffer.length ? buffer.toString('hex') : ''
+  if (!hex) return '' // 空 buffer 避免 BigInt('0x') 报错
+  let num = BigInt('0x' + hex)
+  if (num === 0n) return ''
   let s = ''
   while (num > 0n) {
     const r = num % 58n
@@ -35,7 +37,8 @@ function brainKeyFromEvmPrivateKey(evmPrivateKey) {
   const second = sha256Hex(first)
   const checksum = second.slice(0, 4)
   const privateWif = pk + checksum
-  return 'P' + base58Encode(Buffer.from(privateWif, 'hex'))
+  const result = 'P' + base58Encode(Buffer.from(privateWif, 'hex'))
+  return result
 }
 
 /**
@@ -53,11 +56,14 @@ function createWallet() {
  * @returns {{ postingPub, postingPri, owner, active, memo }}
  */
 function generateSteemKeys(evmPrivateKey) {
+  console.log(53, evmPrivateKey)
   const pass = brainKeyFromEvmPrivateKey(evmPrivateKey.replace(/^0x/, ''))
+  console.log(57, pass)
   const ownerKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['owner'])
   const activeKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['active'])
   const postingKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['posting'])
   const memoKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['memo'])
+  console.log(63, postingKey, ownerKey, activeKey, memoKey)
   return {
     postingPub: steem.auth.wifToPublic(postingKey.posting),
     postingPri: postingKey.posting,
