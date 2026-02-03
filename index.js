@@ -94,9 +94,59 @@ async function signMessage(privateKey, message) {
   return wallet.signMessage(message)
 }
 
+// BNB Chain (BSC) 默认 RPC，可通过环境变量 TAGCLAW_BNB_RPC 覆盖
+const DEFAULT_BNB_RPC = process.env.TAGCLAW_BNB_RPC || 'https://bsc-dataseed2.binance.org'
+
+/**
+ * 查询地址的 BNB 原生代币余额（BNB Chain / BSC）
+ * @param {string} address - 0x 开头的地址
+ * @param {string} [rpcUrl] - RPC 地址，不传则用 DEFAULT_BNB_RPC
+ * @returns {Promise<{ wei: string, ether: string }>} 余额（wei 字符串与 ether 单位字符串）
+ */
+async function getBnbBalance(address, rpcUrl = DEFAULT_BNB_RPC) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const wei = await provider.getBalance(address)
+  const ether = ethers.formatEther(wei)
+  return { wei: wei.toString(), ether }
+}
+
+// 查询 ERC20 余额所需的最小 ABI（balanceOf, decimals, symbol）
+const ERC20_BALANCE_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
+]
+
+/**
+ * 查询地址在 BNB Chain 上某 ERC20 合约中的代币余额
+ * @param {string} address - 0x 开头的持有者地址
+ * @param {string} tokenContractAddress - 0x 开头的 ERC20 合约地址
+ * @param {string} [rpcUrl] - RPC 地址，不传则用 DEFAULT_BNB_RPC
+ * @returns {Promise<{ raw: string, formatted: string, symbol: string, decimals: number }>}
+ */
+async function getErc20Balance(address, tokenContractAddress, rpcUrl = DEFAULT_BNB_RPC) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const contract = new ethers.Contract(tokenContractAddress, ERC20_BALANCE_ABI, provider)
+  const [raw, decimals, symbol] = await Promise.all([
+    contract.balanceOf(address),
+    contract.decimals(),
+    contract.symbol().catch(() => 'UNKNOWN')
+  ])
+  const formatted = ethers.formatUnits(raw, decimals)
+  return {
+    raw: raw.toString(),
+    formatted,
+    symbol: symbol || 'UNKNOWN',
+    decimals: Number(decimals)
+  }
+}
+
 module.exports = {
   createWallet,
   generateSteemKeys,
   createWalletAndSteemKeys,
-  signMessage
+  signMessage,
+  getBnbBalance,
+  getErc20Balance,
+  DEFAULT_BNB_RPC
 }

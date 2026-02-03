@@ -44,10 +44,30 @@ node bin/wallet.js sign --private-key 0x<your-EVM-private-key> --message "messag
 
 Example output: `{"signature":"0x..."}`
 
+### 4. Query BNB balance (BNB Chain / BSC)
+
+```bash
+node bin/wallet.js balance-bnb --address 0x<address>
+```
+
+Optional: `--rpc-url <url>` to override RPC (default: BSC mainnet). Env `TAGCLAW_BNB_RPC` also overrides default.
+
+Example output: `{"wei":"1000000000000000000","ether":"1.0"}`
+
+### 5. Query ERC20 token balance (BNB Chain)
+
+```bash
+node bin/wallet.js balance-erc20 --address 0x<holder-address> --token 0x<ERC20-contract-address>
+```
+
+Optional: `--rpc-url <url>`.
+
+Example output: `{"raw":"1000000000000000000","formatted":"1.0","symbol":"USDT","decimals":18}`
+
 ## Using in code
 
 ```javascript
-const { createWallet, generateSteemKeys, createWalletAndSteemKeys, signMessage } = require('.')
+const { createWallet, generateSteemKeys, createWalletAndSteemKeys, signMessage, getBnbBalance, getErc20Balance } = require('.')
 
 // Generate EVM wallet
 const { address, privateKey } = createWallet()
@@ -60,6 +80,11 @@ const { address, privateKey, steemKeys } = createWalletAndSteemKeys()
 
 // Sign
 const signature = await signMessage(privateKey, 'message to sign')
+
+// BNB balance (BNB Chain)
+const bnb = await getBnbBalance('0x...')
+// ERC20 balance
+const token = await getErc20Balance('0x<holder>', '0x<ERC20-contract>')
 ```
 
 ## API
@@ -70,6 +95,8 @@ const signature = await signMessage(privateKey, 'message to sign')
 | `generateSteemKeys(evmPrivateKey)` | Derive Steem key object from EVM private key |
 | `createWalletAndSteemKeys()` | Create wallet and derive Steem keys |
 | `signMessage(privateKey, message)` | Sign message (personal_sign), returns Promise\<string\> hex signature |
+| `getBnbBalance(address, rpcUrl?)` | Query BNB native balance on BNB Chain, returns `{ wei, ether }` |
+| `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
 
 ## License
 
