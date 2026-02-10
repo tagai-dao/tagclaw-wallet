@@ -117,6 +117,12 @@ const ERC20_BALANCE_ABI = [
   'function symbol() view returns (string)'
 ]
 
+// 转账 ERC20 需要的 ABI（transfer）
+const ERC20_TRANSFER_ABI = [
+  ...ERC20_BALANCE_ABI,
+  'function transfer(address to, uint256 amount) returns (bool)'
+]
+
 /**
  * 查询地址在 BNB Chain 上某 ERC20 合约中的代币余额
  * @param {string} address - 0x 开头的持有者地址
@@ -141,6 +147,65 @@ async function getErc20Balance(address, tokenContractAddress, rpcUrl = DEFAULT_B
   }
 }
 
+/**
+ * 转账 BNB（原生代币）到指定地址
+ * @param {string} privateKey - 0x 开头的发送方私钥
+ * @param {string} toAddress - 0x 开头的接收方地址
+ * @param {string} amount - 数量，支持 wei 字符串或 ether 单位字符串（如 "0.01" 表示 0.01 BNB）
+ * @param {string} [rpcUrl] - RPC 地址，不传则用 DEFAULT_BNB_RPC
+ * @param {{ gasLimit?: string | bigint }} [opts] - 可选，如 gasLimit
+ * @returns {Promise<{ hash: string, from: string, to: string, value: string }>} 交易哈希及基本信息
+ */
+async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_RPC, opts = {}) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const wallet = new ethers.Wallet(privateKey, provider)
+  // 若 amount 含小数点则视为 ether 单位，否则视为 wei 字符串
+  const valueWei = amount.includes('.') || amount.includes('e') || amount.includes('E')
+    ? ethers.parseEther(amount)
+    : BigInt(amount)
+  const tx = await wallet.sendTransaction({
+    to: toAddress,
+    value: valueWei,
+    ...(opts.gasLimit != null && { gasLimit: opts.gasLimit })
+  })
+  const receipt = await tx.wait()
+  return {
+    hash: receipt.hash,
+    from: receipt.from,
+    to: toAddress,
+    value: valueWei.toString()
+  }
+}
+
+/**
+ * 转账 ERC20 到指定地址
+ * @param {string} privateKey - 0x 开头的发送方私钥
+ * @param {string} tokenContractAddress - 0x 开头的 ERC20 合约地址
+ * @param {string} toAddress - 0x 开头的接收方地址
+ * @param {string} amount - 数量（人类可读，如 "100" 表示 100 个代币，会按合约 decimals 转换）
+ * @param {string} [rpcUrl] - RPC 地址，不传则用 DEFAULT_BNB_RPC
+ * @param {{ gasLimit?: string | bigint }} [opts] - 可选，如 gasLimit
+ * @returns {Promise<{ hash: string, from: string, to: string, token: string, value: string }>}
+ */
+async function transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl = DEFAULT_BNB_RPC, opts = {}) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const wallet = new ethers.Wallet(privateKey, provider)
+  const contract = new ethers.Contract(tokenContractAddress, ERC20_TRANSFER_ABI, wallet)
+  const decimals = await contract.decimals()
+  const amountRaw = ethers.parseUnits(amount, decimals)
+  const tx = await contract.transfer(toAddress, amountRaw, {
+    ...(opts.gasLimit != null && { gasLimit: opts.gasLimit })
+  })
+  const receipt = await tx.wait()
+  return {
+    hash: receipt.hash,
+    from: receipt.from,
+    to: toAddress,
+    token: tokenContractAddress,
+    value: amountRaw.toString()
+  }
+}
+
 module.exports = {
   createWallet,
   generateSteemKeys,
@@ -148,5 +213,7 @@ module.exports = {
   signMessage,
   getBnbBalance,
   getErc20Balance,
+  transferBnb,
+  transferErc20,
   DEFAULT_BNB_RPC
 }
