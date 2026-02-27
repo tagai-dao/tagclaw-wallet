@@ -17,6 +17,8 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 | | Query ERC20 token balance | `balance-erc20` |
 | BNB Chain transfer | Send BNB (native) | `transfer-bnb` |
 | | Send ERC20 token | `transfer-erc20` |
+| Pump trade | Buy token via pump/swap routes | `buy-token` |
+| | Sell token via pump/swap routes | `sell-token` |
 
 BNB Chain RPC can be set via `--rpc-url` or env `TAGCLAW_BNB_RPC`; default is BSC mainnet.
 
@@ -96,10 +98,66 @@ node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token
 - `--amount`: Human-readable amount (e.g. `100` for 100 tokens; converted using contract decimals). Optional: `--rpc-url <url>`.
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","token":"0x...","value":"100000000000000000000"}`
 
+### 8. Buy token
+
+```bash
+node bin/wallet.js buy-token \
+  --private-key 0x<your-EVM-private-key> \
+  --token 0x<token-contract> \
+  --version 5 \
+  --eth-amount 1000000000000000 \
+  --listed false \
+  --is-import false \
+  --slippage 100 \
+  --signature 0x<trade-signature-for-version5-when-unlisted>
+```
+
+- `--private-key`: sender EVM private key (`0x...`).
+- `--token`: token contract address.
+- `--version`: token version, e.g. `1` / `5` / `6`.
+- `--eth-amount`: input ETH/BNB amount in wei.
+- `--listed`: whether token is listed (`true` or `false`).
+- `--is-import`: whether token is import token (`true` or `false`).
+- `--slippage`: slippage in bps, e.g. `100` = 1%.
+- `--signature`: required only when `version=5` and `listed=false`.
+
+### 9. Sell token
+
+```bash
+node bin/wallet.js sell-token \
+  --private-key 0x<your-EVM-private-key> \
+  --token 0x<token-contract> \
+  --version 5 \
+  --amount 1000000000000000000 \
+  --listed true \
+  --is-import false \
+  --slippage 100
+```
+
+- `--private-key`: sender EVM private key (`0x...`).
+- `--token`: token contract address.
+- `--version`: token version, e.g. `1` / `5` / `6`.
+- `--amount`: token amount to sell (raw uint256).
+- `--listed`: whether token is listed (`true` or `false`).
+- `--is-import`: whether token is import token (`true` or `false`).
+- `--slippage`: slippage in bps, e.g. `100` = 1%.
+- Optional: `--sellsman`, `--rpc-url`.
+
 ## Using in code
 
 ```javascript
-const { createWallet, generateSteemKeys, createWalletAndSteemKeys, signMessage, getBnbBalance, getErc20Balance, transferBnb, transferErc20 } = require('.')
+const {
+  createWallet,
+  generateSteemKeys,
+  createWalletAndSteemKeys,
+  signMessage,
+  getBnbBalance,
+  getErc20Balance,
+  transferBnb,
+  transferErc20,
+  buyToken,
+  sellToken
+} = require('.')
 
 // Generate EVM wallet
 const { address, privateKey } = createWallet()
@@ -122,6 +180,27 @@ const token = await getErc20Balance('0x<holder>', '0x<ERC20-contract>')
 const bnbTx = await transferBnb(privateKey, '0x<to>', '0.01')
 // Transfer ERC20 (amount: human-readable string, e.g. "100")
 const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', '100')
+
+// Pump buy/sell
+const buyTx = await buyToken({
+  privateKey,
+  token: '0x<token>',
+  version: 5,
+  ethAmount: '1000000000000000',
+  listed: false,
+  isImport: false,
+  slippage: 100,
+  signature: '0x...'
+})
+const sellTx = await sellToken({
+  privateKey,
+  token: '0x<token>',
+  version: 5,
+  amount: '1000000000000000000',
+  listed: true,
+  isImport: false,
+  slippage: 100
+})
 ```
 
 ## API
@@ -136,6 +215,8 @@ const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', 
 | `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
 | `transferBnb(privateKey, toAddress, amount, rpcUrl?, opts?)` | Send BNB to address; `amount` in ether or wei string; returns `{ hash, from, to, value }` |
 | `transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl?, opts?)` | Send ERC20 to address; `amount` human-readable; returns `{ hash, from, to, token, value }` |
+| `buyToken(params)` | Pump buy flow with listed/import/version branches; returns `{ hash, route, ... }` |
+| `sellToken(params)` | Pump sell flow with allowance/approve handling; returns `{ hash, route, approveHash?, ... }` |
 
 ## License
 
