@@ -5,6 +5,7 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 - **Minimal deps**: Only `ethers` and `steem` (no js-sha256/bs58; uses Node built-in crypto and inline base58)
 - **Single purpose**: Wallet-related operations only, no registration logic
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
+- **Runtime**: Node.js 18+ (uses native `fetch`)
 
 ## Features overview
 
@@ -17,6 +18,8 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 | | Query ERC20 token balance | `balance-erc20` |
 | BNB Chain transfer | Send BNB (native) | `transfer-bnb` |
 | | Send ERC20 token | `transfer-erc20` |
+| Pump trade | Buy token via pump/swap routes | `buy-token` |
+| | Sell token via pump/swap routes | `sell-token` |
 
 BNB Chain RPC can be set via `--rpc-url` or env `TAGCLAW_BNB_RPC`; default is BSC mainnet.
 
@@ -96,10 +99,54 @@ node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token
 - `--amount`: Human-readable amount (e.g. `100` for 100 tokens; converted using contract decimals). Optional: `--rpc-url <url>`.
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","token":"0x...","value":"100000000000000000000"}`
 
+### 8. Buy token
+
+```bash
+node bin/wallet.js buy-token \
+  --private-key 0x<your-EVM-private-key> \
+  --tick MyToken \
+  --eth-amount 1000000000000000
+```
+
+- `--private-key`: sender EVM private key (`0x...`).
+- `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
+- `--eth-amount`: input ETH/BNB amount in wei.
+- Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
+- `--signature`: required only when `version=5` and unlisted.
+
+### 9. Sell token
+
+```bash
+node bin/wallet.js sell-token \
+  --private-key 0x<your-EVM-private-key> \
+  --tick MyToken \
+  --amount 1000000000000000000
+```
+
+- `--private-key`: sender EVM private key (`0x...`).
+- `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
+- `--amount`: token amount to sell (raw uint256).
+- Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
+
 ## Using in code
 
 ```javascript
-const { createWallet, generateSteemKeys, createWalletAndSteemKeys, signMessage, getBnbBalance, getErc20Balance, transferBnb, transferErc20 } = require('.')
+const {
+  configure,
+  createWallet,
+  generateSteemKeys,
+  createWalletAndSteemKeys,
+  signMessage,
+  getBnbBalance,
+  getErc20Balance,
+  transferBnb,
+  transferErc20,
+  buyToken,
+  sellToken
+} = require('.')
+
+// 可选：自定义 API 地址（默认 https://bsc-api.tagai.fun）
+configure({ apiUrl: 'https://your-api.example.com' })
 
 // Generate EVM wallet
 const { address, privateKey } = createWallet()
@@ -122,6 +169,20 @@ const token = await getErc20Balance('0x<holder>', '0x<ERC20-contract>')
 const bnbTx = await transferBnb(privateKey, '0x<to>', '0.01')
 // Transfer ERC20 (amount: human-readable string, e.g. "100")
 const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', '100')
+
+// Buy token — 只需传 tick（代币名称），version/listed/isImport 自动获取
+const buyTx = await buyToken({
+  privateKey,
+  tick: 'MyToken',
+  ethAmount: '1000000000000000'
+})
+
+// Sell token — 同理
+const sellTx = await sellToken({
+  privateKey,
+  tick: 'MyToken',
+  amount: '1000000000000000000'
+})
 ```
 
 ## API
@@ -136,6 +197,9 @@ const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', 
 | `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
 | `transferBnb(privateKey, toAddress, amount, rpcUrl?, opts?)` | Send BNB to address; `amount` in ether or wei string; returns `{ hash, from, to, value }` |
 | `transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl?, opts?)` | Send ERC20 to address; `amount` human-readable; returns `{ hash, from, to, token, value }` |
+| `configure(opts)` | Set module config, e.g. `configure({ apiUrl: '...' })`. Default API: `https://bsc-api.tagai.fun` |
+| `buyToken(params)` | Pump buy: pass `{ privateKey, tick, ethAmount }`, version/listed/isImport auto-fetched; slippage default 2% |
+| `sellToken(params)` | Pump sell: pass `{ privateKey, tick, amount }`, version/listed/isImport auto-fetched; slippage default 2% |
 
 ## License
 
