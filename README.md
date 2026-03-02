@@ -5,6 +5,7 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 - **Minimal deps**: Only `ethers` and `steem` (no js-sha256/bs58; uses Node built-in crypto and inline base58)
 - **Single purpose**: Wallet-related operations only, no registration logic
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
+- **Runtime**: Node.js 18+ (uses native `fetch`)
 
 ## Features overview
 
@@ -103,50 +104,35 @@ node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token
 ```bash
 node bin/wallet.js buy-token \
   --private-key 0x<your-EVM-private-key> \
-  --token 0x<token-contract> \
-  --version 5 \
-  --eth-amount 1000000000000000 \
-  --listed false \
-  --is-import false \
-  --slippage 100 \
-  --signature 0x<trade-signature-for-version5-when-unlisted>
+  --tick MyToken \
+  --eth-amount 1000000000000000
 ```
 
 - `--private-key`: sender EVM private key (`0x...`).
-- `--token`: token contract address.
-- `--version`: token version, e.g. `1` / `5` / `6`.
+- `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
 - `--eth-amount`: input ETH/BNB amount in wei.
-- `--listed`: whether token is listed (`true` or `false`).
-- `--is-import`: whether token is import token (`true` or `false`).
-- `--slippage`: slippage in bps, e.g. `100` = 1%.
-- `--signature`: required only when `version=5` and `listed=false`.
+- Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
+- `--signature`: required only when `version=5` and unlisted.
 
 ### 9. Sell token
 
 ```bash
 node bin/wallet.js sell-token \
   --private-key 0x<your-EVM-private-key> \
-  --token 0x<token-contract> \
-  --version 5 \
-  --amount 1000000000000000000 \
-  --listed true \
-  --is-import false \
-  --slippage 100
+  --tick MyToken \
+  --amount 1000000000000000000
 ```
 
 - `--private-key`: sender EVM private key (`0x...`).
-- `--token`: token contract address.
-- `--version`: token version, e.g. `1` / `5` / `6`.
+- `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
 - `--amount`: token amount to sell (raw uint256).
-- `--listed`: whether token is listed (`true` or `false`).
-- `--is-import`: whether token is import token (`true` or `false`).
-- `--slippage`: slippage in bps, e.g. `100` = 1%.
-- Optional: `--sellsman`, `--rpc-url`.
+- Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 
 ## Using in code
 
 ```javascript
 const {
+  configure,
   createWallet,
   generateSteemKeys,
   createWalletAndSteemKeys,
@@ -158,6 +144,9 @@ const {
   buyToken,
   sellToken
 } = require('.')
+
+// 可选：自定义 API 地址（默认 https://bsc-api.tagai.fun）
+configure({ apiUrl: 'https://your-api.example.com' })
 
 // Generate EVM wallet
 const { address, privateKey } = createWallet()
@@ -181,25 +170,18 @@ const bnbTx = await transferBnb(privateKey, '0x<to>', '0.01')
 // Transfer ERC20 (amount: human-readable string, e.g. "100")
 const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', '100')
 
-// Pump buy/sell
+// Buy token — 只需传 tick（代币名称），version/listed/isImport 自动获取
 const buyTx = await buyToken({
   privateKey,
-  token: '0x<token>',
-  version: 5,
-  ethAmount: '1000000000000000',
-  listed: false,
-  isImport: false,
-  slippage: 100,
-  signature: '0x...'
+  tick: 'MyToken',
+  ethAmount: '1000000000000000'
 })
+
+// Sell token — 同理
 const sellTx = await sellToken({
   privateKey,
-  token: '0x<token>',
-  version: 5,
-  amount: '1000000000000000000',
-  listed: true,
-  isImport: false,
-  slippage: 100
+  tick: 'MyToken',
+  amount: '1000000000000000000'
 })
 ```
 
@@ -215,8 +197,9 @@ const sellTx = await sellToken({
 | `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
 | `transferBnb(privateKey, toAddress, amount, rpcUrl?, opts?)` | Send BNB to address; `amount` in ether or wei string; returns `{ hash, from, to, value }` |
 | `transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl?, opts?)` | Send ERC20 to address; `amount` human-readable; returns `{ hash, from, to, token, value }` |
-| `buyToken(params)` | Pump buy flow with listed/import/version branches; returns `{ hash, route, ... }` |
-| `sellToken(params)` | Pump sell flow with allowance/approve handling; returns `{ hash, route, approveHash?, ... }` |
+| `configure(opts)` | Set module config, e.g. `configure({ apiUrl: '...' })`. Default API: `https://bsc-api.tagai.fun` |
+| `buyToken(params)` | Pump buy: pass `{ privateKey, tick, ethAmount }`, version/listed/isImport auto-fetched; slippage default 2% |
+| `sellToken(params)` | Pump sell: pass `{ privateKey, tick, amount }`, version/listed/isImport auto-fetched; slippage default 2% |
 
 ## License
 

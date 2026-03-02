@@ -22,6 +22,42 @@ const {
 
 const STEEM_USERNAME = 'tagai'
 
+// 模块级别配置，通过 configure() 修改
+const _config = {
+  apiUrl: 'https://bsc-api.tagai.fun'
+}
+
+/**
+ * 设置模块级别配置（如 API 地址）
+ * @param {{ apiUrl?: string }} opts
+ */
+function configure(opts = {}) {
+  if (opts.apiUrl) _config.apiUrl = opts.apiUrl
+}
+
+/**
+ * 根据 tick（代币名称）从 community detail API 获取 token 合约地址及元信息
+ * @param {string} tick - 代币名称（区分大小写）
+ * @returns {Promise<{ token: string, version: number, listed: boolean, isImport: boolean }>}
+ */
+async function fetchTokenInfo(tick) {
+  const url = `${_config.apiUrl}/community/detail?tick=${encodeURIComponent(tick)}`
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    throw new Error(`fetchTokenInfo failed: HTTP ${resp.status} for tick="${tick}"`)
+  }
+  const data = await resp.json()
+  if (!data || !data.token) {
+    throw new Error(`fetchTokenInfo: no token found for tick="${tick}"`)
+  }
+  return {
+    token: data.token,
+    version: Number(data.version),
+    listed: Number(data.listedDayNumber) > 0,
+    isImport: !!data.isImport
+  }
+}
+
 // Base58 alphabet (Steem/Bitcoin compatible), implemented inline without third-party deps
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
@@ -322,15 +358,13 @@ async function getUnlistedSellAmount(token, version, tokenAmount, provider) {
 
 /**
  * Buy token (aligned with tiptag-ui src/utils/pump.ts buyToken branch logic)
+ * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
  * @param {string} params.privateKey - sender private key
- * @param {string} params.token - token contract address
- * @param {number} params.version - token version
+ * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.ethAmount - input BNB amount (wei)
- * @param {string|null|undefined} [params.sellsman] - referrer address
- * @param {boolean} params.listed - whether token is listed
- * @param {boolean} params.isImport - whether token is import token (only meaningful when listed=true)
- * @param {number} [params.slippage=0] - slippage in bps
+ * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
+ * @param {number} [params.slippage=200] - slippage in bps, 默认 200 即 2%
  * @param {string} [params.rpcUrl] - RPC URL
  * @param {string} [params.signature] - required when version=5 and listed=false
  * @returns {Promise<{ hash: string, route: string, expectedAmount: string, amountOutMin?: string }>}
@@ -338,20 +372,22 @@ async function getUnlistedSellAmount(token, version, tokenAmount, provider) {
 async function buyToken(params) {
   const {
     privateKey,
-    token,
-    version,
+    tick,
     ethAmount,
     sellsman,
-    listed,
-    isImport,
-    slippage = 0,
+    slippage = 200,
     rpcUrl = DEFAULT_BNB_RPC,
     signature
   } = params
 
   if (!privateKey) throw new Error('privateKey is required')
-  if (!token || !ethers.isAddress(token)) throw new Error('invalid token address')
-  if (!Number.isInteger(Number(version)) || Number(version) <= 0) throw new Error('invalid version')
+  if (!tick) throw new Error('tick is required')
+
+  const tokenInfo = await fetchTokenInfo(tick)
+  const { token, version, listed, isImport } = tokenInfo
+
+  if (!token || !ethers.isAddress(token)) throw new Error('invalid token address from API')
+  if (!Number.isInteger(version) || version <= 0) throw new Error('invalid version from API')
 
   if (ethAmount == null || ethAmount === '') {
     throwWalletError('INVALID_ETH_AMOUNT', 'ethAmount is required')
@@ -449,34 +485,34 @@ async function buyToken(params) {
 
 /**
  * Sell token (aligned with tiptag-ui src/utils/pump.ts sellToken branch logic)
+ * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
  * @param {string} params.privateKey - sender private key
- * @param {string} params.token - token contract address
- * @param {number} params.version - token version
+ * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.amount - token amount to sell (raw)
- * @param {string|null|undefined} [params.sellsman] - referrer address
- * @param {boolean} params.listed - whether token is listed
- * @param {boolean} params.isImport - whether token is import token (only meaningful when listed=true)
- * @param {number} [params.slippage=0] - slippage in bps
+ * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
+ * @param {number} [params.slippage=200] - slippage in bps, 默认 200 即 2%
  * @param {string} [params.rpcUrl] - RPC URL
  * @returns {Promise<{ hash: string, route: string, approveHash?: string | null, amountOutMin?: string }>}
  */
 async function sellToken(params) {
   const {
     privateKey,
-    token,
-    version,
+    tick,
     amount,
     sellsman,
-    listed,
-    isImport,
-    slippage = 0,
+    slippage = 200,
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
   if (!privateKey) throw new Error('privateKey is required')
-  if (!token || !ethers.isAddress(token)) throw new Error('invalid token address')
-  if (!Number.isInteger(Number(version)) || Number(version) <= 0) throw new Error('invalid version')
+  if (!tick) throw new Error('tick is required')
+
+  const tokenInfo = await fetchTokenInfo(tick)
+  const { token, version, listed, isImport } = tokenInfo
+
+  if (!token || !ethers.isAddress(token)) throw new Error('invalid token address from API')
+  if (!Number.isInteger(version) || version <= 0) throw new Error('invalid version from API')
   if (amount == null || amount === '') {
     throwWalletError('INVALID_TOKEN_AMOUNT', 'amount is required')
   }
@@ -562,6 +598,7 @@ async function sellToken(params) {
 }
 
 module.exports = {
+  configure,
   createWallet,
   generateSteemKeys,
   createWalletAndSteemKeys,

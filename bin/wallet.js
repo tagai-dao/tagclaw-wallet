@@ -10,12 +10,13 @@
  *   node bin/wallet.js balance-erc20 --address 0x... --token 0x...
  *   node bin/wallet.js transfer-bnb --private-key 0x... --to 0x... --amount 0.01
  *   node bin/wallet.js transfer-erc20 --private-key 0x... --token 0x... --to 0x... --amount 100
- *   node bin/wallet.js buy-token --private-key 0x... --token 0x... --version 5 --eth-amount 1000000000000000 --listed false --is-import false --slippage 100 --signature 0x...
- *   node bin/wallet.js sell-token --private-key 0x... --token 0x... --version 5 --amount 1000000000000000000 --listed true --is-import false --slippage 100
+ *   node bin/wallet.js buy-token --private-key 0x... --tick MyToken --eth-amount 1000000000000000
+ *   node bin/wallet.js sell-token --private-key 0x... --tick MyToken --amount 1000000000000000000
  *
  * On success, outputs exactly one JSON line to stdout; errors go to stderr and exit with code 1.
  */
 const {
+  configure,
   createWallet,
   generateSteemKeys,
   signMessage,
@@ -36,14 +37,6 @@ function err(msg) {
   process.exit(1)
 }
 
-function parseBool(value, defaultValue = false) {
-  if (value === undefined || value === null || value === '') return defaultValue
-  const v = String(value).toLowerCase()
-  if (v === 'true' || v === '1' || v === 'yes') return true
-  if (v === 'false' || v === '0' || v === 'no') return false
-  err('invalid boolean value: ' + value + ' (expected true/false)')
-}
-
 function parseArgs() {
   const args = process.argv.slice(2)
   const cmd = args[0]
@@ -51,12 +44,11 @@ function parseArgs() {
   let message = ''
   let address = ''
   let token = ''
+  let tick = ''
   let rpcUrl = ''
+  let apiUrl = ''
   let to = ''
   let amount = ''
-  let version = ''
-  let listed = ''
-  let isImport = ''
   let sellsman = ''
   let slippage = ''
   let ethAmount = ''
@@ -66,12 +58,11 @@ function parseArgs() {
     else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
     else if (args[i] === '--address' && args[i + 1]) address = args[++i]
     else if (args[i] === '--token' && args[i + 1]) token = args[++i]
+    else if (args[i] === '--tick' && args[i + 1]) tick = args[++i]
     else if (args[i] === '--rpc-url' && args[i + 1]) rpcUrl = args[++i]
+    else if (args[i] === '--api-url' && args[i + 1]) apiUrl = args[++i]
     else if (args[i] === '--to' && args[i + 1]) to = args[++i]
     else if (args[i] === '--amount' && args[i + 1]) amount = args[++i]
-    else if (args[i] === '--version' && args[i + 1]) version = args[++i]
-    else if (args[i] === '--listed' && args[i + 1]) listed = args[++i]
-    else if (args[i] === '--is-import' && args[i + 1]) isImport = args[++i]
     else if (args[i] === '--sellsman' && args[i + 1]) sellsman = args[++i]
     else if (args[i] === '--slippage' && args[i + 1]) slippage = args[++i]
     else if (args[i] === '--eth-amount' && args[i + 1]) ethAmount = args[++i]
@@ -83,12 +74,11 @@ function parseArgs() {
     message,
     address,
     token,
+    tick,
     rpcUrl,
+    apiUrl,
     to,
     amount,
-    version,
-    listed,
-    isImport,
     sellsman,
     slippage,
     ethAmount,
@@ -103,17 +93,18 @@ async function main() {
     message,
     address,
     token,
+    tick,
     rpcUrl,
+    apiUrl,
     to,
     amount,
-    version,
-    listed,
-    isImport,
     sellsman,
     slippage,
     ethAmount,
     signature
   } = parseArgs()
+
+  if (apiUrl) configure({ apiUrl })
 
   if (!cmd) {
     err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|transfer-bnb|transfer-erc20|buy-token|sell-token> [options]')
@@ -176,21 +167,15 @@ async function main() {
 
     if (cmd === 'buy-token') {
       if (!privateKey) err('buy-token requires --private-key 0x...')
-      if (!token) err('buy-token requires --token 0x...')
-      if (!version) err('buy-token requires --version <number>')
+      if (!tick) err('buy-token requires --tick <token-name>')
       if (!ethAmount) err('buy-token requires --eth-amount <wei>')
-      if (listed === '') err('buy-token requires --listed <true|false>')
-      if (isImport === '') err('buy-token requires --is-import <true|false>')
 
       const result = await buyToken({
         privateKey,
-        token,
-        version: Number(version),
+        tick,
         ethAmount,
-        listed: parseBool(listed),
-        isImport: parseBool(isImport),
         sellsman: sellsman || undefined,
-        slippage: slippage ? Number(slippage) : 0,
+        slippage: slippage ? Number(slippage) : undefined,
         rpcUrl: rpcUrl || undefined,
         signature: signature || undefined
       })
@@ -200,21 +185,15 @@ async function main() {
 
     if (cmd === 'sell-token') {
       if (!privateKey) err('sell-token requires --private-key 0x...')
-      if (!token) err('sell-token requires --token 0x...')
-      if (!version) err('sell-token requires --version <number>')
+      if (!tick) err('sell-token requires --tick <token-name>')
       if (!amount) err('sell-token requires --amount <raw uint256>')
-      if (listed === '') err('sell-token requires --listed <true|false>')
-      if (isImport === '') err('sell-token requires --is-import <true|false>')
 
       const result = await sellToken({
         privateKey,
-        token,
-        version: Number(version),
+        tick,
         amount,
-        listed: parseBool(listed),
-        isImport: parseBool(isImport),
         sellsman: sellsman || undefined,
-        slippage: slippage ? Number(slippage) : 0,
+        slippage: slippage ? Number(slippage) : undefined,
         rpcUrl: rpcUrl || undefined
       })
       out(result)
