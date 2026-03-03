@@ -63,6 +63,7 @@ const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvw
 
 function base58Encode(buffer) {
   const hex = buffer.length ? buffer.toString('hex') : ''
+  console.log(66, hex, buffer)
   if (!hex) return '' // Avoid BigInt('0x') error on empty buffer
   let num = BigInt('0x' + hex)
   if (num === 0n) return ''
@@ -87,7 +88,8 @@ function brainKeyFromEvmPrivateKey(evmPrivateKey) {
   const second = sha256Hex(first)
   const checksum = second.slice(0, 4)
   const privateWif = pk + checksum
-  const result = 'P' + base58Encode(Buffer.from(privateWif, 'hex'))
+  console.log(89, privateWif, Buffer.from(privateWif, 'hex'))
+  const result = 'P' + base58Encode(Buffer.from(privateWif.replace('0x', ''), 'hex'))
   return result
 }
 
