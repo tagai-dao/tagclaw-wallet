@@ -12,6 +12,9 @@
  *   node bin/wallet.js transfer-erc20 --private-key 0x... --token 0x... --to 0x... --amount 100
  *   node bin/wallet.js buy-token --private-key 0x... --tick MyToken --eth-amount 1000000000000000
  *   node bin/wallet.js sell-token --private-key 0x... --tick MyToken --amount 1000000000000000000
+ *   node bin/wallet.js ipshare-supply --subject 0x...
+ *   node bin/wallet.js ipshare-buy --private-key 0x... --subject 0x... --value 1000000000000000
+ *   node bin/wallet.js ipshare-claim --private-key 0x... --subject 0x...
  *
  * On success, outputs exactly one JSON line to stdout; errors go to stderr and exit with code 1.
  */
@@ -25,7 +28,19 @@ const {
   transferBnb,
   transferErc20,
   buyToken,
-  sellToken
+  sellToken,
+  getIpShareSupply,
+  getIpShareBalance,
+  getIpShareStakeInfo,
+  getIpSharePendingRewards,
+  createIpShare,
+  buyIpShare,
+  sellIpShare,
+  stakeIpShare,
+  unstakeIpShare,
+  redeemIpShare,
+  claimIpShareRewards,
+  IPSHARE_CONTRACT
 } = require('../index.js')
 
 function out(json) {
@@ -53,6 +68,11 @@ function parseArgs() {
   let slippage = ''
   let ethAmount = ''
   let signature = ''
+  let subject = ''
+  let holder = ''
+  let staker = ''
+  let value = ''
+  let amountOutMin = ''
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--private-key' && args[i + 1]) privateKey = args[++i]
     else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
@@ -67,6 +87,11 @@ function parseArgs() {
     else if (args[i] === '--slippage' && args[i + 1]) slippage = args[++i]
     else if (args[i] === '--eth-amount' && args[i + 1]) ethAmount = args[++i]
     else if (args[i] === '--signature' && args[i + 1]) signature = args[++i]
+    else if (args[i] === '--subject' && args[i + 1]) subject = args[++i]
+    else if (args[i] === '--holder' && args[i + 1]) holder = args[++i]
+    else if (args[i] === '--staker' && args[i + 1]) staker = args[++i]
+    else if (args[i] === '--value' && args[i + 1]) value = args[++i]
+    else if (args[i] === '--amount-out-min' && args[i + 1]) amountOutMin = args[++i]
   }
   return {
     cmd,
@@ -82,7 +107,12 @@ function parseArgs() {
     sellsman,
     slippage,
     ethAmount,
-    signature
+    signature,
+    subject,
+    holder,
+    staker,
+    value,
+    amountOutMin
   }
 }
 
@@ -101,13 +131,18 @@ async function main() {
     sellsman,
     slippage,
     ethAmount,
-    signature
+    signature,
+    subject,
+    holder,
+    staker,
+    value,
+    amountOutMin
   } = parseArgs()
 
   if (apiUrl) configure({ apiUrl })
 
   if (!cmd) {
-    err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|transfer-bnb|transfer-erc20|buy-token|sell-token> [options]')
+    err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]')
   }
 
   try {
@@ -200,7 +235,132 @@ async function main() {
       return
     }
 
-    err('Unknown command: ' + cmd + '. Use create-wallet | steem-keys | sign | balance-bnb | balance-erc20 | transfer-bnb | transfer-erc20 | buy-token | sell-token')
+    if (cmd === 'ipshare-supply') {
+      if (!subject) err('ipshare-supply requires --subject 0x...')
+      const result = await getIpShareSupply(subject, rpcUrl || undefined)
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-balance') {
+      if (!subject) err('ipshare-balance requires --subject 0x...')
+      if (!holder) err('ipshare-balance requires --holder 0x...')
+      const result = await getIpShareBalance(subject, holder, rpcUrl || undefined)
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-stake-info') {
+      if (!subject) err('ipshare-stake-info requires --subject 0x...')
+      if (!staker) err('ipshare-stake-info requires --staker 0x...')
+      const result = await getIpShareStakeInfo(subject, staker, rpcUrl || undefined)
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-pending-rewards') {
+      if (!subject) err('ipshare-pending-rewards requires --subject 0x...')
+      if (!staker) err('ipshare-pending-rewards requires --staker 0x...')
+      const result = await getIpSharePendingRewards(subject, staker, rpcUrl || undefined)
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-create') {
+      if (!privateKey) err('ipshare-create requires --private-key 0x...')
+      const result = await createIpShare({
+        privateKey,
+        subject: subject || undefined,
+        value: value || undefined,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-buy') {
+      if (!privateKey) err('ipshare-buy requires --private-key 0x...')
+      if (!subject) err('ipshare-buy requires --subject 0x...')
+      if (!value) err('ipshare-buy requires --value <wei>')
+      const result = await buyIpShare({
+        privateKey,
+        subject,
+        value,
+        amountOutMin: amountOutMin || undefined,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-sell') {
+      if (!privateKey) err('ipshare-sell requires --private-key 0x...')
+      if (!subject) err('ipshare-sell requires --subject 0x...')
+      if (!amount) err('ipshare-sell requires --amount <raw uint256>')
+      const result = await sellIpShare({
+        privateKey,
+        subject,
+        amount,
+        amountOutMin: amountOutMin || undefined,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-stake') {
+      if (!privateKey) err('ipshare-stake requires --private-key 0x...')
+      if (!subject) err('ipshare-stake requires --subject 0x...')
+      if (!amount) err('ipshare-stake requires --amount <raw uint256>')
+      const result = await stakeIpShare({
+        privateKey,
+        subject,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-unstake') {
+      if (!privateKey) err('ipshare-unstake requires --private-key 0x...')
+      if (!subject) err('ipshare-unstake requires --subject 0x...')
+      if (!amount) err('ipshare-unstake requires --amount <raw uint256>')
+      const result = await unstakeIpShare({
+        privateKey,
+        subject,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-redeem') {
+      if (!privateKey) err('ipshare-redeem requires --private-key 0x...')
+      if (!subject) err('ipshare-redeem requires --subject 0x...')
+      const result = await redeemIpShare({
+        privateKey,
+        subject,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'ipshare-claim') {
+      if (!privateKey) err('ipshare-claim requires --private-key 0x...')
+      if (!subject) err('ipshare-claim requires --subject 0x...')
+      const result = await claimIpShareRewards({
+        privateKey,
+        subject,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    err('Unknown command: ' + cmd + '. Use create-wallet | steem-keys | sign | balance-bnb | balance-erc20 | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
   } catch (e) {
     err(e.message || String(e))
   }

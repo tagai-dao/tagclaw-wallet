@@ -20,8 +20,21 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 | | Send ERC20 token | `transfer-erc20` |
 | Pump trade | Buy token via pump/swap routes | `buy-token` |
 | | Sell token via pump/swap routes | `sell-token` |
+| IPShare query | Query IPShare supply | `ipshare-supply` |
+| | Query IPShare balance | `ipshare-balance` |
+| | Query IPShare stake info | `ipshare-stake-info` |
+| | Query IPShare pending rewards | `ipshare-pending-rewards` |
+| IPShare write | Create IPShare | `ipshare-create` |
+| | Buy IPShare | `ipshare-buy` |
+| | Sell IPShare | `ipshare-sell` |
+| | Stake IPShare | `ipshare-stake` |
+| | Unstake IPShare | `ipshare-unstake` |
+| | Redeem IPShare | `ipshare-redeem` |
+| | Claim IPShare rewards | `ipshare-claim` |
 
 BNB Chain RPC can be set via `--rpc-url` or env `TAGCLAW_BNB_RPC`; default is BSC mainnet.
+
+IPShare uses a fixed contract address in this wallet package: `0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922`.
 
 ## Installation
 
@@ -128,6 +141,140 @@ node bin/wallet.js sell-token \
 - `--amount`: token amount to sell (raw uint256).
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 
+## IPShare guide for agents
+
+All IPShare commands in this package talk to the fixed contract:
+
+```text
+0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922
+```
+
+### Parameter semantics
+
+- `subject`: the IPShare subject / author address. One `subject` maps to one IPShare market.
+- `holder`: the wallet whose unstaked IPShare balance you want to inspect.
+- `staker`: the wallet whose staking position or pending rewards you want to inspect.
+- `value`: payable BNB amount in wei. Used by `ipshare-create` and `ipshare-buy`.
+- `amount`: IPShare raw amount in `uint256` form. Used by `ipshare-sell`, `ipshare-stake`, `ipshare-unstake`.
+- `amountOutMin`: slippage guard in raw chain units. For `ipshare-buy` it means minimum IPShare out; for `ipshare-sell` it means minimum BNB out in wei.
+
+### Agent usage rules
+
+- Prefer passing raw on-chain integer strings for `value`, `amount`, and `amountOutMin`.
+- `ipshare-create` uses `--value` as the payable amount. If omitted, the wallet sends the on-chain `createFee`.
+- `ipshare-claim` does not decide whether claim is necessary. The caller should inspect `ipshare-pending-rewards` first if it wants to avoid unnecessary transactions.
+- Stake-related commands only operate on the caller wallet. The wallet package does not implement higher-level strategy or policy checks.
+
+### 10. Query IPShare supply
+
+```bash
+node bin/wallet.js ipshare-supply --subject 0x<subject-address>
+```
+
+Example output:
+
+```json
+{"contract":"0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922","subject":"0x...","raw":"10000000000000000000","formatted":"10.0"}
+```
+
+### 11. Query IPShare balance
+
+```bash
+node bin/wallet.js ipshare-balance \
+  --subject 0x<subject-address> \
+  --holder 0x<holder-address>
+```
+
+### 12. Query IPShare stake info
+
+```bash
+node bin/wallet.js ipshare-stake-info \
+  --subject 0x<subject-address> \
+  --staker 0x<staker-address>
+```
+
+The JSON response includes:
+
+- `amountRaw` / `amountFormatted`: current staked amount
+- `redeemAmountRaw` / `redeemAmountFormatted`: amount waiting for redeem
+- `unlockTime`: unix timestamp string
+- `unlockTimeIso`: ISO time string when available
+- `profitRaw` / `profitFormatted`: accumulated profit field from `getStakerInfo`
+- `isStaking` / `isUnstaking`: lightweight derived flags for agents
+
+### 13. Query pending rewards
+
+```bash
+node bin/wallet.js ipshare-pending-rewards \
+  --subject 0x<subject-address> \
+  --staker 0x<staker-address>
+```
+
+### 14. Create IPShare
+
+```bash
+node bin/wallet.js ipshare-create \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address>
+```
+
+- `--subject` is optional. If omitted, the wallet address derived from `--private-key` is used as the subject.
+- `--value` is optional. If omitted, the wallet uses the on-chain `createFee`.
+
+### 15. Buy IPShare
+
+```bash
+node bin/wallet.js ipshare-buy \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address> \
+  --value 1000000000000000 \
+  --amount-out-min 0
+```
+
+### 16. Sell IPShare
+
+```bash
+node bin/wallet.js ipshare-sell \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address> \
+  --amount 1000000000000000000 \
+  --amount-out-min 0
+```
+
+### 17. Stake IPShare
+
+```bash
+node bin/wallet.js ipshare-stake \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address> \
+  --amount 1000000000000000000
+```
+
+### 18. Unstake IPShare
+
+```bash
+node bin/wallet.js ipshare-unstake \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address> \
+  --amount 1000000000000000000
+```
+
+### 19. Redeem IPShare
+
+```bash
+node bin/wallet.js ipshare-redeem \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address>
+```
+
+### 20. Claim IPShare rewards
+
+```bash
+node bin/wallet.js ipshare-claim \
+  --private-key 0x<your-EVM-private-key> \
+  --subject 0x<subject-address>
+```
+
 ## Using in code
 
 ```javascript
@@ -142,7 +289,19 @@ const {
   transferBnb,
   transferErc20,
   buyToken,
-  sellToken
+  sellToken,
+  getIpShareSupply,
+  getIpShareBalance,
+  getIpShareStakeInfo,
+  getIpSharePendingRewards,
+  createIpShare,
+  buyIpShare,
+  sellIpShare,
+  stakeIpShare,
+  unstakeIpShare,
+  redeemIpShare,
+  claimIpShareRewards,
+  IPSHARE_CONTRACT
 } = require('.')
 
 // 可选：自定义 API 地址（默认 https://bsc-api.tagai.fun）
@@ -183,6 +342,60 @@ const sellTx = await sellToken({
   tick: 'MyToken',
   amount: '1000000000000000000'
 })
+
+// Fixed IPShare contract used by this package
+console.log(IPSHARE_CONTRACT)
+
+// IPShare queries
+const ipshareSupply = await getIpShareSupply('0x<subject>')
+const ipshareBalance = await getIpShareBalance('0x<subject>', '0x<holder>')
+const ipshareStakeInfo = await getIpShareStakeInfo('0x<subject>', '0x<staker>')
+const ipsharePendingRewards = await getIpSharePendingRewards('0x<subject>', '0x<staker>')
+
+// Create IPShare; if subject is omitted, wallet.address is used
+const createTx = await createIpShare({
+  privateKey,
+  subject: '0x<subject>'
+})
+
+// Buy / sell IPShare
+const buyIpShareTx = await buyIpShare({
+  privateKey,
+  subject: '0x<subject>',
+  value: '1000000000000000',
+  amountOutMin: '0'
+})
+
+const sellIpShareTx = await sellIpShare({
+  privateKey,
+  subject: '0x<subject>',
+  amount: '1000000000000000000',
+  amountOutMin: '0'
+})
+
+// Stake lifecycle
+const stakeTx = await stakeIpShare({
+  privateKey,
+  subject: '0x<subject>',
+  amount: '1000000000000000000'
+})
+
+const unstakeTx = await unstakeIpShare({
+  privateKey,
+  subject: '0x<subject>',
+  amount: '1000000000000000000'
+})
+
+const redeemTx = await redeemIpShare({
+  privateKey,
+  subject: '0x<subject>'
+})
+
+// The caller decides whether claim should be sent
+const claimTx = await claimIpShareRewards({
+  privateKey,
+  subject: '0x<subject>'
+})
 ```
 
 ## API
@@ -200,6 +413,18 @@ const sellTx = await sellToken({
 | `configure(opts)` | Set module config, e.g. `configure({ apiUrl: '...' })`. Default API: `https://bsc-api.tagai.fun` |
 | `buyToken(params)` | Pump buy: pass `{ privateKey, tick, ethAmount }`, version/listed/isImport auto-fetched; slippage default 2% |
 | `sellToken(params)` | Pump sell: pass `{ privateKey, tick, amount }`, version/listed/isImport auto-fetched; slippage default 2% |
+| `getIpShareSupply(subject, rpcUrl?)` | Query IPShare supply for a subject; returns `{ contract, subject, raw, formatted }` |
+| `getIpShareBalance(subject, holder, rpcUrl?)` | Query holder IPShare balance under a subject; returns `{ contract, subject, holder, raw, formatted }` |
+| `getIpShareStakeInfo(subject, staker, rpcUrl?)` | Query staking info; returns staked amount, redeem amount, unlock time, debts, profit and derived flags |
+| `getIpSharePendingRewards(subject, staker, rpcUrl?)` | Query pending rewards from `getPendingProfits`; returns `{ contract, subject, staker, raw, formatted }` |
+| `createIpShare(params)` | Create IPShare using fixed contract; params `{ privateKey, subject?, value?, rpcUrl? }` |
+| `buyIpShare(params)` | Buy IPShare; params `{ privateKey, subject, value, amountOutMin?, rpcUrl? }` |
+| `sellIpShare(params)` | Sell IPShare; params `{ privateKey, subject, amount, amountOutMin?, rpcUrl? }` |
+| `stakeIpShare(params)` | Stake IPShare; params `{ privateKey, subject, amount, rpcUrl? }` |
+| `unstakeIpShare(params)` | Start unstaking IPShare; params `{ privateKey, subject, amount, rpcUrl? }` |
+| `redeemIpShare(params)` | Redeem matured unstaked IPShare; params `{ privateKey, subject, rpcUrl? }` |
+| `claimIpShareRewards(params)` | Claim rewards directly; caller decides whether claiming is needed |
+| `IPSHARE_CONTRACT` | Fixed IPShare contract address used by this wallet package |
 
 ## License
 

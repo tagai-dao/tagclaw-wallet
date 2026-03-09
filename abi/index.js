@@ -4,6 +4,7 @@
 const { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI, TOKEN_ALLOWANCE_ABI } = require('./erc20')
 const { UNISWAP_ROUTER_ABI } = require('./router')
 const { WRAP_SWAPER_ABI, WRAP_SWAPER2_ABI } = require('./wrapSwaper')
+const { IPSHARE_ABI } = require('./ipshare')
 const {
   TOKEN_BUY_ABI,
   TOKEN1_BUY_ABI,
@@ -20,6 +21,7 @@ module.exports = {
   UNISWAP_ROUTER_ABI,
   WRAP_SWAPER_ABI,
   WRAP_SWAPER2_ABI,
+  IPSHARE_ABI,
   TOKEN_BUY_ABI,
   TOKEN1_BUY_ABI,
   TOKEN5_BUY_ABI,
