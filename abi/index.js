@@ -2,7 +2,12 @@
  * Unified ABI export entrypoint
  */
 const { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI, TOKEN_ALLOWANCE_ABI } = require('./erc20')
-const { UNISWAP_ROUTER_ABI } = require('./router')
+const {
+  UNISWAP_ROUTER_ABI,
+  FACTORY_ABI,
+  PAIR_ABI,
+  CL_POOL_MANAGER_ABI
+} = require('./router')
 const { WRAP_SWAPER_ABI, WRAP_SWAPER2_ABI } = require('./wrapSwaper')
 const { IPSHARE_ABI } = require('./ipshare')
 const {
@@ -19,6 +24,9 @@ module.exports = {
   ERC20_TRANSFER_ABI,
   TOKEN_ALLOWANCE_ABI,
   UNISWAP_ROUTER_ABI,
+  FACTORY_ABI,
+  PAIR_ABI,
+  CL_POOL_MANAGER_ABI,
   WRAP_SWAPER_ABI,
   WRAP_SWAPER2_ABI,
   IPSHARE_ABI,

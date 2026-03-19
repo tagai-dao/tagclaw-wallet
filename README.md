@@ -16,6 +16,7 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 | Signing | Sign message (personal_sign) | `sign` |
 | BNB Chain query | Query native BNB balance | `balance-bnb` |
 | | Query ERC20 token balance | `balance-erc20` |
+| | Query token price (BNB/USD, token/BNB, token/USD) | `price-token` |
 | BNB Chain transfer | Send BNB (native) | `transfer-bnb` |
 | | Send ERC20 token | `transfer-erc20` |
 | Pump trade | Buy token via pump/swap routes | `buy-token` |
@@ -94,7 +95,22 @@ Optional: `--rpc-url <url>`.
 
 Example output: `{"raw":"1000000000000000000","formatted":"1.0","symbol":"USDT","decimals":18}`
 
-### 6. Transfer BNB (native token)
+### 6. Query token price
+
+```bash
+node bin/wallet.js price-token --tick TagClaw
+```
+
+- `--tick`: 代币名称（区分大小写），如 TagClaw、BUIDL、TTAI。token、version、listed、isImport、pair 等信息会自动从 community detail API 获取。
+- Optional: `--rpc-url <url>`, `--api-url <url>`.
+
+Example output:
+
+```json
+{"tick":"TagClaw","token":"0xe7324F2987aCd88Ee7286EB9DAb0EE926ad36a68","version":4,"listed":true,"isImport":false,"pair":"0x2771b3CC3eC98EE8B17B7CD2520C4727bcC2676e","bnbPriceUsd":643.61,"tokenPriceInBnb":8.624222012577607e-8,"tokenPriceUsd":0.000055506355295150736}
+```
+
+### 7. Transfer BNB (native token)
 
 ```bash
 node bin/wallet.js transfer-bnb --private-key 0x<your-EVM-private-key> --to 0x<recipient-address> --amount 0.01
@@ -103,7 +119,7 @@ node bin/wallet.js transfer-bnb --private-key 0x<your-EVM-private-key> --to 0x<r
 - `--amount`: Ether units (e.g. `0.01`) or wei string (no decimal). Optional: `--rpc-url <url>`.
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","value":"10000000000000000"}`
 
-### 7. Transfer ERC20 token
+### 8. Transfer ERC20 token
 
 ```bash
 node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token 0x<ERC20-contract-address> --to 0x<recipient-address> --amount 100
@@ -112,7 +128,7 @@ node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token
 - `--amount`: Human-readable amount (e.g. `100` for 100 tokens; converted using contract decimals). Optional: `--rpc-url <url>`.
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","token":"0x...","value":"100000000000000000000"}`
 
-### 8. Buy token
+### 9. Buy token
 
 ```bash
 node bin/wallet.js buy-token \
@@ -127,7 +143,7 @@ node bin/wallet.js buy-token \
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 - `--signature`: required only when `version=5` and unlisted.
 
-### 9. Sell token
+### 10. Sell token
 
 ```bash
 node bin/wallet.js sell-token \
@@ -165,7 +181,7 @@ All IPShare commands in this package talk to the fixed contract:
 - `ipshare-claim` does not decide whether claim is necessary. The caller should inspect `ipshare-pending-rewards` first if it wants to avoid unnecessary transactions.
 - Stake-related commands only operate on the caller wallet. The wallet package does not implement higher-level strategy or policy checks.
 
-### 10. Query IPShare supply
+### 11. Query IPShare supply
 
 ```bash
 node bin/wallet.js ipshare-supply --subject 0x<subject-address>
@@ -177,7 +193,7 @@ Example output:
 {"contract":"0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922","subject":"0x...","raw":"10000000000000000000","formatted":"10.0"}
 ```
 
-### 11. Query IPShare balance
+### 12. Query IPShare balance
 
 ```bash
 node bin/wallet.js ipshare-balance \
@@ -185,7 +201,7 @@ node bin/wallet.js ipshare-balance \
   --holder 0x<holder-address>
 ```
 
-### 12. Query IPShare stake info
+### 13. Query IPShare stake info
 
 ```bash
 node bin/wallet.js ipshare-stake-info \
@@ -202,7 +218,7 @@ The JSON response includes:
 - `profitRaw` / `profitFormatted`: accumulated profit field from `getStakerInfo`
 - `isStaking` / `isUnstaking`: lightweight derived flags for agents
 
-### 13. Query pending rewards
+### 14. Query pending rewards
 
 ```bash
 node bin/wallet.js ipshare-pending-rewards \
@@ -210,7 +226,7 @@ node bin/wallet.js ipshare-pending-rewards \
   --staker 0x<staker-address>
 ```
 
-### 14. Create IPShare
+### 15. Create IPShare
 
 ```bash
 node bin/wallet.js ipshare-create \
@@ -221,7 +237,7 @@ node bin/wallet.js ipshare-create \
 - `--subject` is optional. If omitted, the wallet address derived from `--private-key` is used as the subject.
 - `--value` is optional. If omitted, the wallet uses the on-chain `createFee`.
 
-### 15. Buy IPShare
+### 16. Buy IPShare
 
 ```bash
 node bin/wallet.js ipshare-buy \
@@ -231,7 +247,7 @@ node bin/wallet.js ipshare-buy \
   --amount-out-min 0
 ```
 
-### 16. Sell IPShare
+### 17. Sell IPShare
 
 ```bash
 node bin/wallet.js ipshare-sell \
@@ -241,7 +257,7 @@ node bin/wallet.js ipshare-sell \
   --amount-out-min 0
 ```
 
-### 17. Stake IPShare
+### 18. Stake IPShare
 
 ```bash
 node bin/wallet.js ipshare-stake \
@@ -250,7 +266,7 @@ node bin/wallet.js ipshare-stake \
   --amount 1000000000000000000
 ```
 
-### 18. Unstake IPShare
+### 19. Unstake IPShare
 
 ```bash
 node bin/wallet.js ipshare-unstake \
@@ -259,7 +275,7 @@ node bin/wallet.js ipshare-unstake \
   --amount 1000000000000000000
 ```
 
-### 19. Redeem IPShare
+### 20. Redeem IPShare
 
 ```bash
 node bin/wallet.js ipshare-redeem \
@@ -267,7 +283,7 @@ node bin/wallet.js ipshare-redeem \
   --subject 0x<subject-address>
 ```
 
-### 20. Claim IPShare rewards
+### 21. Claim IPShare rewards
 
 ```bash
 node bin/wallet.js ipshare-claim \
@@ -286,6 +302,7 @@ const {
   signMessage,
   getBnbBalance,
   getErc20Balance,
+  getTokenPrice,
   transferBnb,
   transferErc20,
   buyToken,
@@ -323,6 +340,10 @@ const signature = await signMessage(privateKey, 'message to sign')
 const bnb = await getBnbBalance('0x...')
 // ERC20 balance
 const token = await getErc20Balance('0x<holder>', '0x<ERC20-contract>')
+
+// Token price (BNB/USD, token/BNB, token/USD)
+const price = await getTokenPrice({ tick: 'TagClaw' })
+// => { tick, token, version, listed, isImport, pair, bnbPriceUsd, tokenPriceInBnb, tokenPriceUsd }
 
 // Transfer BNB (amount: ether string like "0.01" or wei string)
 const bnbTx = await transferBnb(privateKey, '0x<to>', '0.01')
@@ -408,6 +429,7 @@ const claimTx = await claimIpShareRewards({
 | `signMessage(privateKey, message)` | Sign message (personal_sign), returns Promise\<string\> hex signature |
 | `getBnbBalance(address, rpcUrl?)` | Query BNB native balance on BNB Chain, returns `{ wei, ether }` |
 | `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
+| `getTokenPrice(params)` | Query token price by tick; params `{ tick, rpcUrl? }`; returns `{ tick, token, version, listed, isImport, pair, bnbPriceUsd, tokenPriceInBnb, tokenPriceUsd }` |
 | `transferBnb(privateKey, toAddress, amount, rpcUrl?, opts?)` | Send BNB to address; `amount` in ether or wei string; returns `{ hash, from, to, value }` |
 | `transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl?, opts?)` | Send ERC20 to address; `amount` human-readable; returns `{ hash, from, to, token, value }` |
 | `configure(opts)` | Set module config, e.g. `configure({ apiUrl: '...' })`. Default API: `https://bsc-api.tagai.fun` |

@@ -12,6 +12,7 @@
  *   node bin/wallet.js transfer-erc20 --private-key 0x... --token 0x... --to 0x... --amount 100
  *   node bin/wallet.js buy-token --private-key 0x... --tick MyToken --eth-amount 1000000000000000
  *   node bin/wallet.js sell-token --private-key 0x... --tick MyToken --amount 1000000000000000000
+ *   node bin/wallet.js price-token --tick TagClaw
  *   node bin/wallet.js ipshare-supply --subject 0x...
  *   node bin/wallet.js ipshare-buy --private-key 0x... --subject 0x... --value 1000000000000000
  *   node bin/wallet.js ipshare-claim --private-key 0x... --subject 0x...
@@ -25,6 +26,7 @@ const {
   signMessage,
   getBnbBalance,
   getErc20Balance,
+  getTokenPrice,
   transferBnb,
   transferErc20,
   buyToken,
@@ -142,7 +144,7 @@ async function main() {
   if (apiUrl) configure({ apiUrl })
 
   if (!cmd) {
-    err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]')
+    err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]')
   }
 
   try {
@@ -177,6 +179,13 @@ async function main() {
       if (!address) err('balance-erc20 requires --address 0x...')
       if (!token) err('balance-erc20 requires --token 0x... (ERC20 contract address)')
       const result = await getErc20Balance(address, token, rpcUrl || undefined)
+      out(result)
+      return
+    }
+
+    if (cmd === 'price-token') {
+      if (!tick) err('price-token requires --tick <token-name>')
+      const result = await getTokenPrice({ tick, rpcUrl: rpcUrl || undefined })
       out(result)
       return
     }
@@ -360,7 +369,7 @@ async function main() {
       return
     }
 
-    err('Unknown command: ' + cmd + '. Use create-wallet | steem-keys | sign | balance-bnb | balance-erc20 | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
+    err('Unknown command: ' + cmd + '. Use create-wallet | steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
   } catch (e) {
     err(e.message || String(e))
   }
