@@ -22,6 +22,7 @@ const TOKEN_SUPPLY_ABI = [
 ]
 
 const PUMP_QUOTE_ABI = [
+  'function getPrice(uint256 supply, uint256 amount) view returns (uint256)',
   'function getBuyAmountByValue(uint256 supply, uint256 amount) view returns (uint256)',
   'function getSellPriceAfterFee(uint256 supply, uint256 amount) view returns (uint256)'
 ]
