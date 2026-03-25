@@ -9,9 +9,18 @@
   "scripts": {
     "wallet": "node bin/wallet.js"
   },
-  "keywords": ["tagclaw", "wallet", "ethereum", "steem", "agent", "sign"],
+  "keywords": [
+    "tagclaw",
+    "wallet",
+    "ethereum",
+    "steem",
+    "agent",
+    "sign"
+  ],
   "license": "MIT",
   "dependencies": {
+    "@bitslabsec/claw_wallet_sdk": "^1.0.0",
+    "dotenv": "^17.3.1",
     "ethers": "^6.13.1",
     "steem": "^0.7.11"
   }

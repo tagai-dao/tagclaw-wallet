@@ -3,9 +3,12 @@
  * tagclaw-wallet CLI — wallet-only capabilities with JSON output for agent parsing
  *
  * Usage:
+ *   bash install.sh   # Claw 沙箱 + .env.clay（在 tagclaw-wallet 目录）
+ *   node bin/wallet.js claw-address
+ *   node bin/wallet.js sync-env   # Claw 地址 + Steem 密钥写入同级 .env
  *   node bin/wallet.js create-wallet
- *   node bin/wallet.js steem-keys --private-key 0x...
- *   node bin/wallet.js sign --private-key 0x... --message "message to sign"
+ *   node bin/wallet.js steem-keys   # 默认 Claw 签名派生；可选 --private-key 走 legacy
+ *   node bin/wallet.js sign --message "..."   # 默认 Claw；可选 --private-key
  *   node bin/wallet.js balance-bnb --address 0x...
  *   node bin/wallet.js balance-erc20 --address 0x... --token 0x...
  *   node bin/wallet.js transfer-bnb --private-key 0x... --to 0x... --amount 0.01
@@ -23,7 +26,10 @@ const {
   configure,
   createWallet,
   generateSteemKeys,
+  generateSteemKeysFromClaw,
   signMessage,
+  getClawWalletAddress,
+  syncTagclawWalletEnv,
   getBnbBalance,
   getErc20Balance,
   getTokenPrice,
@@ -75,6 +81,7 @@ function parseArgs() {
   let staker = ''
   let value = ''
   let amountOutMin = ''
+  let chain = ''
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--private-key' && args[i + 1]) privateKey = args[++i]
     else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
@@ -94,6 +101,7 @@ function parseArgs() {
     else if (args[i] === '--staker' && args[i + 1]) staker = args[++i]
     else if (args[i] === '--value' && args[i + 1]) value = args[++i]
     else if (args[i] === '--amount-out-min' && args[i + 1]) amountOutMin = args[++i]
+    else if (args[i] === '--chain' && args[i + 1]) chain = args[++i]
   }
   return {
     cmd,
@@ -114,7 +122,8 @@ function parseArgs() {
     holder,
     staker,
     value,
-    amountOutMin
+    amountOutMin,
+    chain
   }
 }
 
@@ -138,16 +147,31 @@ async function main() {
     holder,
     staker,
     value,
-    amountOutMin
+    amountOutMin,
+    chain
   } = parseArgs()
 
   if (apiUrl) configure({ apiUrl })
 
   if (!cmd) {
-    err('Usage: node bin/wallet.js <create-wallet|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]')
+    err(
+      'Usage: node bin/wallet.js <claw-address|sync-env|create-wallet|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
+    )
   }
 
   try {
+    if (cmd === 'claw-address') {
+      const address = await getClawWalletAddress(chain || undefined)
+      out(chain ? { address, chain } : { address })
+      return
+    }
+
+    if (cmd === 'sync-env') {
+      const result = await syncTagclawWalletEnv({ rpcUrl: rpcUrl || undefined })
+      out({ ...result, envPath: result.envPath })
+      return
+    }
+
     if (cmd === 'create-wallet') {
       const result = createWallet()
       out(result)
@@ -155,15 +179,16 @@ async function main() {
     }
 
     if (cmd === 'steem-keys') {
-      if (!privateKey) err('steem-keys requires --private-key 0x...')
-      const result = generateSteemKeys(privateKey)
+      const result = privateKey
+        ? generateSteemKeys(privateKey)
+        : await generateSteemKeysFromClaw({ rpcUrl: rpcUrl || undefined })
       out(result)
       return
     }
 
     if (cmd === 'sign') {
-      if (!privateKey) err('sign requires --private-key 0x...')
-      const signature = await signMessage(privateKey, message || '')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const signature = await signMessage(pk, message || '')
       out({ signature })
       return
     }
@@ -191,31 +216,31 @@ async function main() {
     }
 
     if (cmd === 'transfer-bnb') {
-      if (!privateKey) err('transfer-bnb requires --private-key 0x...')
       if (!to) err('transfer-bnb requires --to 0x...')
       if (!amount) err('transfer-bnb requires --amount <ether or wei>')
-      const result = await transferBnb(privateKey, to, amount, rpcUrl || undefined)
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const result = await transferBnb(pk, to, amount, rpcUrl || undefined)
       out(result)
       return
     }
 
     if (cmd === 'transfer-erc20') {
-      if (!privateKey) err('transfer-erc20 requires --private-key 0x...')
       if (!token) err('transfer-erc20 requires --token 0x... (ERC20 contract address)')
       if (!to) err('transfer-erc20 requires --to 0x...')
       if (!amount) err('transfer-erc20 requires --amount <human amount>')
-      const result = await transferErc20(privateKey, token, to, amount, rpcUrl || undefined)
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const result = await transferErc20(pk, token, to, amount, rpcUrl || undefined)
       out(result)
       return
     }
 
     if (cmd === 'buy-token') {
-      if (!privateKey) err('buy-token requires --private-key 0x...')
       if (!tick) err('buy-token requires --tick <token-name>')
       if (!ethAmount) err('buy-token requires --eth-amount <wei>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
 
       const result = await buyToken({
-        privateKey,
+        privateKey: pk,
         tick,
         ethAmount,
         sellsman: sellsman || undefined,
@@ -228,12 +253,12 @@ async function main() {
     }
 
     if (cmd === 'sell-token') {
-      if (!privateKey) err('sell-token requires --private-key 0x...')
       if (!tick) err('sell-token requires --tick <token-name>')
       if (!amount) err('sell-token requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
 
       const result = await sellToken({
-        privateKey,
+        privateKey: pk,
         tick,
         amount,
         sellsman: sellsman || undefined,
@@ -276,9 +301,9 @@ async function main() {
     }
 
     if (cmd === 'ipshare-create') {
-      if (!privateKey) err('ipshare-create requires --private-key 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await createIpShare({
-        privateKey,
+        privateKey: pk,
         subject: subject || undefined,
         value: value || undefined,
         rpcUrl: rpcUrl || undefined
@@ -288,11 +313,11 @@ async function main() {
     }
 
     if (cmd === 'ipshare-buy') {
-      if (!privateKey) err('ipshare-buy requires --private-key 0x...')
       if (!subject) err('ipshare-buy requires --subject 0x...')
       if (!value) err('ipshare-buy requires --value <wei>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await buyIpShare({
-        privateKey,
+        privateKey: pk,
         subject,
         value,
         amountOutMin: amountOutMin || undefined,
@@ -303,11 +328,11 @@ async function main() {
     }
 
     if (cmd === 'ipshare-sell') {
-      if (!privateKey) err('ipshare-sell requires --private-key 0x...')
       if (!subject) err('ipshare-sell requires --subject 0x...')
       if (!amount) err('ipshare-sell requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await sellIpShare({
-        privateKey,
+        privateKey: pk,
         subject,
         amount,
         amountOutMin: amountOutMin || undefined,
@@ -318,11 +343,11 @@ async function main() {
     }
 
     if (cmd === 'ipshare-stake') {
-      if (!privateKey) err('ipshare-stake requires --private-key 0x...')
       if (!subject) err('ipshare-stake requires --subject 0x...')
       if (!amount) err('ipshare-stake requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await stakeIpShare({
-        privateKey,
+        privateKey: pk,
         subject,
         amount,
         rpcUrl: rpcUrl || undefined
@@ -332,11 +357,11 @@ async function main() {
     }
 
     if (cmd === 'ipshare-unstake') {
-      if (!privateKey) err('ipshare-unstake requires --private-key 0x...')
       if (!subject) err('ipshare-unstake requires --subject 0x...')
       if (!amount) err('ipshare-unstake requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await unstakeIpShare({
-        privateKey,
+        privateKey: pk,
         subject,
         amount,
         rpcUrl: rpcUrl || undefined
@@ -346,10 +371,10 @@ async function main() {
     }
 
     if (cmd === 'ipshare-redeem') {
-      if (!privateKey) err('ipshare-redeem requires --private-key 0x...')
       if (!subject) err('ipshare-redeem requires --subject 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await redeemIpShare({
-        privateKey,
+        privateKey: pk,
         subject,
         rpcUrl: rpcUrl || undefined
       })
@@ -358,10 +383,10 @@ async function main() {
     }
 
     if (cmd === 'ipshare-claim') {
-      if (!privateKey) err('ipshare-claim requires --private-key 0x...')
       if (!subject) err('ipshare-claim requires --subject 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
       const result = await claimIpShareRewards({
-        privateKey,
+        privateKey: pk,
         subject,
         rpcUrl: rpcUrl || undefined
       })

@@ -3,10 +3,29 @@
  * Dependencies: ethers, steem (no js-sha256/bs58; uses Node crypto + inline base58)
  */
 const crypto = require('crypto')
+const fs = require('fs')
+const path = require('path')
 const { ethers } = require('ethers')
 const steem = require('steem')
-require('dotenv').config()
-const { ClawEthersSigner } = require("@bitslabsec/claw_wallet_sdk/ethers")
+const { ClawEthersSigner } = require('@bitslabsec/claw_wallet_sdk/ethers')
+const { ClawSandboxClient } = require('@bitslabsec/claw_wallet_sdk')
+
+/** 与 install.sh / 沙箱写入的凭证同级：先 .env.clay 再 .env（后者可覆盖） */
+const WALLET_ROOT = path.join(__dirname)
+require('dotenv').config({ path: path.join(WALLET_ROOT, '.env.clay'), quiet: true })
+require('dotenv').config({ path: path.join(WALLET_ROOT, '.env'), quiet: true })
+
+/**
+ * 与产品约定一致：必须用 JSON.stringify(..., null, 4)，禁止手抄整段字符串（Steem brain 派生依赖 Claw personal_sign）
+ */
+const RegisterSteemMessage = JSON.stringify(
+  {
+    project: 'tagai',
+    method: 'generate-social-account'
+  },
+  null,
+  4
+)
 const {
   ERC20_BALANCE_ABI,
   ERC20_TRANSFER_ABI,
@@ -87,16 +106,30 @@ function sha256Hex(str) {
   return crypto.createHash('sha256').update(str, 'utf8').digest('hex')
 }
 
-/** Derive Steem brain key (WIF format) from EVM private key */
-function brainKeyFromEvmPrivateKey(evmPrivateKey) {
-  const pk = '0x80' + evmPrivateKey.replace(/^0x/, '')
+/** 32 字节 hex（64 字符，可带或不带 0x） */
+function normalizeSecretHex64(secretHex) {
+  const h = secretHex.replace(/^0x/i, '')
+  if (!/^[0-9a-fA-F]{64}$/.test(h)) {
+    throw new Error('secret hex must be 64 hex characters (32 bytes)')
+  }
+  return h.toLowerCase()
+}
+
+/** Steem brain 密码串：与 legacy「EVM 私钥 → brain」同一套编码，仅输入改为任意 32 字节材料 */
+function brainKeyFromSecretHex(secretHex64) {
+  const evmNo0x = normalizeSecretHex64(secretHex64)
+  const pk = '0x80' + evmNo0x
   const first = sha256Hex(pk)
   const second = sha256Hex(first)
   const checksum = second.slice(0, 4)
   const privateWif = pk + checksum
-  console.log(89, privateWif, Buffer.from(privateWif, 'hex'))
   const result = 'P' + base58Encode(Buffer.from(privateWif.replace('0x', ''), 'hex'))
   return result
+}
+
+/** Derive Steem brain key (WIF format) from EVM private key */
+function brainKeyFromEvmPrivateKey(evmPrivateKey) {
+  return brainKeyFromSecretHex(evmPrivateKey.replace(/^0x/, ''))
 }
 
 /**
@@ -113,8 +146,7 @@ function createWallet() {
  * @param {string} evmPrivateKey - private key starting with 0x
  * @returns {{ postingPub, postingPri, owner, active, memo }}
  */
-function generateSteemKeys(evmPrivateKey) {
-  const pass = brainKeyFromEvmPrivateKey(evmPrivateKey.replace(/^0x/, ''))
+function steemKeysFromBrainPass(pass) {
   const ownerKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['owner'])
   const activeKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['active'])
   const postingKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['posting'])
@@ -126,6 +158,12 @@ function generateSteemKeys(evmPrivateKey) {
     active: steem.auth.wifToPublic(activeKey.active),
     memo: steem.auth.wifToPublic(memoKey.memo)
   }
+}
+
+/** 由本地 EVM 私钥派生 Steem（legacy，与 Claw 路径得到的 Steem 密钥不同） */
+function generateSteemKeys(evmPrivateKey) {
+  const pass = brainKeyFromEvmPrivateKey(evmPrivateKey.replace(/^0x/, ''))
+  return steemKeysFromBrainPass(pass)
 }
 
 /**
@@ -140,17 +178,200 @@ function createWalletAndSteemKeys() {
 
 /**
  * Sign a message with EVM private key (personal_sign / eth_sign style)
- * @param {string} privateKey - private key starting with 0x
+ * @param {string} [privateKey] - 若省略或空串则走 Claw 沙箱签名
  * @param {string} message - plain UTF-8 message
  * @returns {Promise<string>} hex signature string (0x-prefixed)
  */
 async function signMessage(privateKey, message) {
-  const wallet = new ethers.Wallet(privateKey)
-  return wallet.signMessage(message)
+  if (privateKey && String(privateKey).trim().startsWith('0x')) {
+    const wallet = new ethers.Wallet(privateKey.trim())
+    return wallet.signMessage(message)
+  }
+  const signer = await getClawEthersSigner()
+  return signer.signMessage(message)
 }
 
 // Default BNB Chain (BSC) RPC, override via TAGCLAW_BNB_RPC
 const DEFAULT_BNB_RPC = process.env.TAGCLAW_BNB_RPC || 'https://bsc-dataseed2.binance.org'
+
+// --- Claw sandbox (BitsLabSec claw_wallet_sdk) ---
+
+function loadClawConfig() {
+  const sandboxUrl = (process.env.CLAY_SANDBOX_URL || '').trim().replace(/\/+$/, '')
+  const sandboxToken = (process.env.CLAY_AGENT_TOKEN || process.env.AGENT_TOKEN || '').trim()
+  let uid = (process.env.CLAY_UID || '').trim()
+  if (!uid) {
+    const idPath = path.join(WALLET_ROOT, 'identity.json')
+    if (fs.existsSync(idPath)) {
+      try {
+        const j = JSON.parse(fs.readFileSync(idPath, 'utf8'))
+        uid = String(j.uid || j.UID || '').trim()
+      } catch (_) {}
+    }
+  }
+  return { sandboxUrl, sandboxToken, uid }
+}
+
+function assertClawConfig(cfg) {
+  if (!cfg.sandboxUrl || !cfg.sandboxToken || !cfg.uid) {
+    throw new Error(
+      'Claw wallet: set CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid). Run bash install.sh in tagclaw-wallet and check .env.clay.'
+    )
+  }
+}
+
+function clawSignerConfig(cfg) {
+  return {
+    uid: cfg.uid,
+    sandboxUrl: cfg.sandboxUrl,
+    sandboxToken: cfg.sandboxToken
+  }
+}
+
+/** personal_sign 结果 → 32 字节 hex（SHA256(r‖s‖v)） */
+function kdfFromSignatureHex(signatureHex) {
+  const sig = ethers.Signature.from(signatureHex)
+  const r = Buffer.from(ethers.getBytes(sig.r))
+  const s = Buffer.from(ethers.getBytes(sig.s))
+  const v = ((Number(sig.v) % 256) + 256) % 256
+  const vBuf = Buffer.from([v])
+  const packed = Buffer.concat([r, s, vBuf])
+  return crypto.createHash('sha256').update(packed).digest('hex')
+}
+
+async function getBscOrEthAddress(client) {
+  try {
+    return await client.getRequiredAddress('bsc')
+  } catch (_) {
+    return client.getRequiredAddress('ethereum')
+  }
+}
+
+/**
+ * 确保沙箱钱包可读出链上地址；失败时尝试 init / reactivate（与 install.sh 行为一致）
+ * @param {ClawSandboxClient} client
+ */
+async function ensureWalletReadyWithClient(client) {
+  async function tryReady() {
+    try {
+      await getBscOrEthAddress(client)
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (await tryReady()) return
+  try {
+    await client.initWallet({})
+  } catch (_) {
+    /* 可能已存在 */
+  }
+  try {
+    await client.reactivateWallet()
+  } catch (_) {}
+  if (await tryReady()) return
+  throw new Error(
+    'Claw wallet not ready: could not read bsc/ethereum address after init/reactivate. Is clay-sandbox running?'
+  )
+}
+
+/** 用于链上读写：无 privateKey 时用 ClawEthersSigner + 公共 BSC RPC */
+async function getClawEthersSigner(rpcUrl = DEFAULT_BNB_RPC) {
+  const cfg = loadClawConfig()
+  assertClawConfig(cfg)
+  const client = new ClawSandboxClient(clawSignerConfig(cfg))
+  await ensureWalletReadyWithClient(client)
+  const address = await getBscOrEthAddress(client)
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  return new ClawEthersSigner(clawSignerConfig(cfg), provider, address)
+}
+
+/**
+ * @param {string} [privateKey]
+ * @param {string} [rpcUrl]
+ * @returns {Promise<import('ethers').Wallet | import('@bitslabsec/claw_wallet_sdk/ethers').ClawEthersSigner>}
+ */
+async function resolveWriteSigner(privateKey, rpcUrl = DEFAULT_BNB_RPC) {
+  if (privateKey && String(privateKey).trim().startsWith('0x')) {
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    return new ethers.Wallet(privateKey.trim(), provider)
+  }
+  return getClawEthersSigner(rpcUrl)
+}
+
+/** Claw + RegisterSteemMessage 派生 Steem（无需本地 EVM 私钥） */
+async function generateSteemKeysFromClaw(opts = {}) {
+  const rpcUrl = opts.rpcUrl || DEFAULT_BNB_RPC
+  const signer = await getClawEthersSigner(rpcUrl)
+  const signatureHex = await signer.signMessage(RegisterSteemMessage)
+  const secretHex = kdfFromSignatureHex(signatureHex)
+  const pass = brainKeyFromSecretHex(secretHex)
+  return steemKeysFromBrainPass(pass)
+}
+
+/** 查询沙箱中的 EVM 地址（BSC 优先） */
+async function getClawWalletAddress(chain) {
+  const cfg = loadClawConfig()
+  assertClawConfig(cfg)
+  const client = new ClawSandboxClient(clawSignerConfig(cfg))
+  await ensureWalletReadyWithClient(client)
+  if (chain) {
+    return client.getRequiredAddress(chain)
+  }
+  return getBscOrEthAddress(client)
+}
+
+function formatEnvLine(key, value) {
+  const s = String(value)
+  if (/[\s#'"]/.test(s)) return `${key}=${JSON.stringify(s)}`
+  return `${key}=${s}`
+}
+
+/**
+ * 将 EVM 地址与 Steem 材料合并写入 tagclaw-wallet/.env（保留其它已有行）
+ * @param {{ address: string, steemKeys: object }} data
+ */
+function mergeTagclawWalletEnv(data) {
+  const { address, steemKeys } = data
+  const envPath = path.join(WALLET_ROOT, '.env')
+  const keysToSet = new Set([
+    'TAGCLAW_EVM_ADDRESS',
+    'TAGCLAW_STEEM_POSTING_PUB',
+    'TAGCLAW_STEEM_POSTING_PRI',
+    'TAGCLAW_STEEM_OWNER_PUB',
+    'TAGCLAW_STEEM_ACTIVE_PUB',
+    'TAGCLAW_STEEM_MEMO_PUB'
+  ])
+  const entries = {
+    TAGCLAW_EVM_ADDRESS: address,
+    TAGCLAW_STEEM_POSTING_PUB: steemKeys.postingPub,
+    TAGCLAW_STEEM_POSTING_PRI: steemKeys.postingPri,
+    TAGCLAW_STEEM_OWNER_PUB: steemKeys.owner,
+    TAGCLAW_STEEM_ACTIVE_PUB: steemKeys.active,
+    TAGCLAW_STEEM_MEMO_PUB: steemKeys.memo
+  }
+  const lines = []
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)
+      if (m && keysToSet.has(m[1])) continue
+      lines.push(line)
+    }
+  }
+  const tail = Object.entries(entries).map(([k, v]) => formatEnvLine(k, v))
+  const body = [...lines, ...tail].join('\n').trimEnd()
+  fs.writeFileSync(envPath, (body ? body + '\n' : tail.join('\n') + '\n'), 'utf8')
+  return envPath
+}
+
+/** 拉取 Claw 地址 + 派生 Steem 并写入 .env */
+async function syncTagclawWalletEnv(opts = {}) {
+  const rpcUrl = opts.rpcUrl || DEFAULT_BNB_RPC
+  const steemKeys = opts.steemKeys || (await generateSteemKeysFromClaw({ rpcUrl }))
+  const address = await getClawWalletAddress()
+  const envPath = mergeTagclawWalletEnv({ address, steemKeys })
+  return { address, steemKeys, envPath }
+}
 
 /**
  * Query native BNB balance for an address (BNB Chain / BSC)
@@ -217,7 +438,7 @@ async function getErc20Balance(address, tokenContractAddress, rpcUrl = DEFAULT_B
 
 /**
  * Transfer native BNB to a target address
- * @param {string} privateKey - sender private key, 0x-prefixed
+ * @param {string} [privateKey] - 本地私钥；省略则使用 Claw
  * @param {string} toAddress - recipient address, 0x-prefixed
  * @param {string} amount - amount as wei string or ether string (e.g. "0.01")
  * @param {string} [rpcUrl] - RPC URL, defaults to DEFAULT_BNB_RPC
@@ -225,8 +446,8 @@ async function getErc20Balance(address, tokenContractAddress, rpcUrl = DEFAULT_B
  * @returns {Promise<{ hash: string, from: string, to: string, value: string }>} tx hash and basic info
  */
 async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_RPC, opts = {}) {
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   // If amount includes a decimal point/exponent, treat as ether units; otherwise wei string
   const valueWei = amount.includes('.') || amount.includes('e') || amount.includes('E')
     ? ethers.parseEther(amount)
@@ -247,7 +468,7 @@ async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_R
 
 /**
  * Transfer ERC20 to a target address
- * @param {string} privateKey - sender private key, 0x-prefixed
+ * @param {string} [privateKey] - 本地私钥；省略则使用 Claw
  * @param {string} tokenContractAddress - ERC20 contract address, 0x-prefixed
  * @param {string} toAddress - recipient address, 0x-prefixed
  * @param {string} amount - human-readable amount, converted using token decimals
@@ -256,8 +477,8 @@ async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_R
  * @returns {Promise<{ hash: string, from: string, to: string, token: string, value: string }>}
  */
 async function transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl = DEFAULT_BNB_RPC, opts = {}) {
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   const contract = new ethers.Contract(tokenContractAddress, ERC20_TRANSFER_ABI, wallet)
   const decimals = await contract.decimals()
   const amountRaw = ethers.parseUnits(amount, decimals)
@@ -665,7 +886,7 @@ async function getTokenPrice(params) {
  * Buy token (aligned with tiptag-ui src/utils/pump.ts buyToken branch logic)
  * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
- * @param {string} params.privateKey - sender private key
+ * @param {string} [params.privateKey] - 本地私钥；省略则使用 Claw 沙箱签名
  * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.ethAmount - input BNB amount (wei)
  * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
@@ -685,7 +906,6 @@ async function buyToken(params) {
     signature
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
   if (!tick) throw new Error('tick is required')
 
   const tokenInfo = await fetchTokenInfo(tick)
@@ -705,8 +925,8 @@ async function buyToken(params) {
   const slippageBps = normalizeSlippage(slippage)
   const sellsmanAddr = normalizeSellsman(sellsman)
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   await ensureNativeBalance(provider, wallet.address, ethAmountBn, 'buy requires ethAmount balance')
 
   try {
@@ -792,7 +1012,7 @@ async function buyToken(params) {
  * Sell token (aligned with tiptag-ui src/utils/pump.ts sellToken branch logic)
  * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
- * @param {string} params.privateKey - sender private key
+ * @param {string} [params.privateKey] - 本地私钥；省略则使用 Claw
  * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.amount - token amount to sell (raw)
  * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
@@ -810,7 +1030,6 @@ async function sellToken(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
   if (!tick) throw new Error('tick is required')
 
   const tokenInfo = await fetchTokenInfo(tick)
@@ -829,8 +1048,8 @@ async function sellToken(params) {
   const slippageBps = normalizeSlippage(slippage)
   const sellsmanAddr = normalizeSellsman(sellsman)
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   await ensureTokenBalance(provider, token, wallet.address, amountBn)
 
   try {
@@ -1018,10 +1237,8 @@ async function createIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   const subjectAddr = subject ? normalizeAddress(subject, 'subject') : wallet.address
 
   try {
@@ -1067,14 +1284,12 @@ async function buyIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
   const valueBn = normalizeRequiredBigInt(value, 'value')
   const amountOutMinBn = normalizeOptionalBigInt(amountOutMin, 'amountOutMin')
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   await ensureNativeBalance(provider, wallet.address, valueBn, 'buy ipshare requires payable value')
 
   try {
@@ -1115,14 +1330,12 @@ async function sellIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
   const amountBn = normalizeRequiredBigInt(amount, 'amount')
   const amountOutMinBn = normalizeOptionalBigInt(amountOutMin, 'amountOutMin')
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   await ensureIpShareBalance(provider, subjectAddr, wallet.address, amountBn)
 
   try {
@@ -1161,13 +1374,11 @@ async function stakeIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
   const amountBn = normalizeRequiredBigInt(amount, 'amount')
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
   await ensureIpShareBalance(provider, subjectAddr, wallet.address, amountBn)
 
   try {
@@ -1203,13 +1414,11 @@ async function unstakeIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
   const amountBn = normalizeRequiredBigInt(amount, 'amount')
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
 
   try {
     const readContract = getIpShareContract(provider)
@@ -1251,11 +1460,9 @@ async function redeemIpShare(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
 
   try {
     const readContract = getIpShareContract(provider)
@@ -1292,11 +1499,9 @@ async function claimIpShareRewards(params) {
     rpcUrl = DEFAULT_BNB_RPC
   } = params
 
-  if (!privateKey) throw new Error('privateKey is required')
-
   const subjectAddr = normalizeAddress(subject, 'subject')
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const wallet = new ethers.Wallet(privateKey, provider)
+  const wallet = await resolveWriteSigner(privateKey, rpcUrl)
+  const provider = wallet.provider
 
   try {
     const readContract = getIpShareContract(provider)
@@ -1319,10 +1524,15 @@ async function claimIpShareRewards(params) {
 
 module.exports = {
   configure,
+  RegisterSteemMessage,
   createWallet,
   generateSteemKeys,
+  generateSteemKeysFromClaw,
   createWalletAndSteemKeys,
   signMessage,
+  getClawWalletAddress,
+  syncTagclawWalletEnv,
+  mergeTagclawWalletEnv,
   getBnbBalance,
   getErc20Balance,
   getTokenPrice,

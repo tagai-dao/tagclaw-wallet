@@ -1,18 +1,49 @@
 # tagclaw-wallet
 
-Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB Chain balance/transfer. No registration, no HTTP server; invoke via `node bin/wallet.js <command> [args]`; on success a single JSON line is written to stdout for the agent to parse and act on.
+Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB Chain balance/transfer. Invoke via `node bin/wallet.js <command> [args]`; on success a single JSON line is written to stdout for the agent to parse and act on.
 
-- **Minimal deps**: Only `ethers` and `steem` (no js-sha256/bs58; uses Node built-in crypto and inline base58)
 - **Single purpose**: Wallet-related operations only, no registration logic
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
 - **Runtime**: Node.js 18+ (uses native `fetch`)
+
+## Claw Wallet
+
+链上签名与默认 Steem 派生依赖 [BitsLabSec claw_wallet_sdk](https://github.com/BitsLabSec/claw_wallet_sdk) 与本目录下的本地 **clay-sandbox**。
+
+1. 在 **本包根目录**（与 `install.sh` 同级，即各 Agent 工作区内的 `tagclaw-wallet`）执行：
+   ```bash
+   bash install.sh
+   ```
+   会下载/启动沙箱，并生成 **`.env.clay`**（含 `CLAY_SANDBOX_URL`、`CLAY_AGENT_TOKEN` 或 `AGENT_TOKEN`；`CLAY_UID` 可在同目录 `identity.json` 中）。
+2. 安装 Node 依赖：`npm install`
+3. 读取 Claw 上的 EVM 地址（JSON 一行）：
+   ```bash
+   node bin/wallet.js claw-address
+   ```
+   可选：`--chain bsc` 或 `--chain ethereum`。
+4. 用 Claw 对规范消息 `personal_sign` 后派生 Steem 密钥（**无需**传 EVM 私钥）：
+   ```bash
+   node bin/wallet.js steem-keys
+   ```
+   明文固定为 `JSON.stringify({ project: "tagai", method: "generate-social-account" }, null, 4)`（与代码中 `RegisterSteemMessage` 一致）。
+5. 将 **`TAGCLAW_EVM_ADDRESS`** 与各 **Steem** 字段写入与本目录 **`.env.clay` 同级** 的 **`.env`**：
+   ```bash
+   node bin/wallet.js sync-env
+   ```
+
+未传 `--private-key` 的写链命令（`transfer-bnb`、`buy-token`、`ipshare-*` 等）均走 **Claw**。若需与旧版一致，可显式传入 `--private-key 0x...`。
+
+**Legacy Steem**：`node bin/wallet.js steem-keys --private-key 0x...` 仍使用「EVM 私钥 → brain」旧算法，与 Claw 默认派生 **不是** 同一套 Steem 密钥。
 
 ## Features overview
 
 | Category | Feature | CLI command |
 |----------|---------|-------------|
-| Wallet & keys | Generate EVM wallet | `create-wallet` |
-| | Derive Steem keys from EVM private key | `steem-keys` |
+| Claw | Print sandbox EVM address | `claw-address` |
+| | Sync address + Steem keys to `.env` | `sync-env` |
+| Wallet & keys | EVM 地址来自 Claw（无本地 privateKey） | `install.sh` → `claw-address` / `sync-env` |
+| | Steem keys（默认 Claw；可选 `--private-key` 仅 legacy） | `steem-keys` |
+| | 本地随机钱包（**不推荐**，与 Claw 流程无关） | `create-wallet` |
 | Signing | Sign message (personal_sign) | `sign` |
 | BNB Chain query | Query native BNB balance | `balance-bnb` |
 | | Query ERC20 token balance | `balance-erc20` |
@@ -43,23 +74,51 @@ IPShare uses a fixed contract address in this wallet package: `0x95450AaD4Cc195e
 git clone <your-repo-url>/tagclaw-wallet.git
 cd tagclaw-wallet
 npm install
+bash install.sh
 ```
 
-Or from parent repo subdirectory: `cd /path/to/tiptag-api/tagclaw-wallet && npm install`
+`install.sh` 会拉取/启动 **clay-sandbox** 并生成本目录 **`.env.clay`**；链上操作与默认 Steem 派生都依赖这一步，**不需要**再跑 `create-wallet` 生成私钥。
+
+Or from parent repo subdirectory: `cd /path/to/.../tagclaw-wallet && npm install && bash install.sh`
 
 ## CLI (for Agents calling via node and parsing JSON)
 
 All successful results **output a single JSON line to stdout** for agents to parse and perform follow-up actions.
 
-### 1. Generate EVM wallet
+### 1. 安装沙箱并获取 EVM 地址（Claw，无 privateKey）
+
+第一步在本包根目录执行（与上方 **Installation** 一致）：
 
 ```bash
-node bin/wallet.js create-wallet
+bash install.sh
+npm install
 ```
 
-Example output: `{"address":"0x...","privateKey":"0x..."}`
+读取沙箱中的 EVM 地址（JSON 一行）：
 
-### 2. Generate Steem keys from EVM private key
+```bash
+node bin/wallet.js claw-address
+```
+
+Example output: `{"address":"0x..."}`（可选 `--chain bsc` / `--chain ethereum`）。
+
+一键把地址 + Steem 材料写入同级 **`.env`**：
+
+```bash
+node bin/wallet.js sync-env
+```
+
+**不再**把 `create-wallet` 作为常规流程；仅调试或迁移旧脚本时才需要本地随机私钥（见文末 API 表中的 legacy 说明）。
+
+### 2. Steem keys（默认 Claw，无需私钥）
+
+需已 `bash install.sh` 且沙箱可用。
+
+```bash
+node bin/wallet.js steem-keys
+```
+
+Legacy（与 Claw 派生结果不同）：
 
 ```bash
 node bin/wallet.js steem-keys --private-key 0x<your-EVM-private-key>
@@ -68,6 +127,14 @@ node bin/wallet.js steem-keys --private-key 0x<your-EVM-private-key>
 Example output: `{"postingPub":"STM...","postingPri":"5K...","owner":"STM...","active":"STM...","memo":"STM..."}`
 
 ### 3. Sign (personal_sign)
+
+默认 Claw：
+
+```bash
+node bin/wallet.js sign --message "message to sign"
+```
+
+本地私钥：
 
 ```bash
 node bin/wallet.js sign --private-key 0x<your-EVM-private-key> --message "message to sign"
@@ -296,6 +363,8 @@ node bin/wallet.js ipshare-claim \
 ```javascript
 const {
   configure,
+  getClawWalletAddress,
+  syncTagclawWalletEnv,
   createWallet,
   generateSteemKeys,
   createWalletAndSteemKeys,
@@ -324,17 +393,25 @@ const {
 // 可选：自定义 API 地址（默认 https://bsc-api.tagai.fun）
 configure({ apiUrl: 'https://your-api.example.com' })
 
-// Generate EVM wallet
-const { address, privateKey } = createWallet()
+// --- 推荐：先在本目录 bash install.sh，再使用 Claw（不传 privateKey）---
+const { address, steemKeys, envPath } = await syncTagclawWalletEnv() // 派生 Steem 并写入 .env
+// 若只需地址：await getClawWalletAddress()
 
-// Generate Steem keys from EVM private key
-const steemKeys = generateSteemKeys(privateKey)
+// Sign / 转账 / 交易：省略 privateKey 即走 Claw
+const signature = await signMessage('', 'message to sign')
+const bnbTx = await transferBnb(undefined, '0x<to>', '0.01')
+const buyTx = await buyToken({
+  tick: 'MyToken',
+  ethAmount: '1000000000000000'
+})
+const sellTx = await sellToken({
+  tick: 'MyToken',
+  amount: '1000000000000000000'
+})
 
-// Generate wallet + Steem keys
-const { address, privateKey, steemKeys } = createWalletAndSteemKeys()
-
-// Sign
-const signature = await signMessage(privateKey, 'message to sign')
+// Legacy（本地随机钱包 + 私钥派生 Steem，与 Claw 默认 Steem 不同）
+// const { address, privateKey } = createWallet()
+// const steemKeys = generateSteemKeys(privateKey)
 
 // BNB balance (BNB Chain)
 const bnb = await getBnbBalance('0x...')
@@ -345,24 +422,8 @@ const token = await getErc20Balance('0x<holder>', '0x<ERC20-contract>')
 const price = await getTokenPrice({ tick: 'TagClaw' })
 // => { tick, token, version, listed, isImport, pair, bnbPriceUsd, tokenPriceInBnb, tokenPriceUsd }
 
-// Transfer BNB (amount: ether string like "0.01" or wei string)
-const bnbTx = await transferBnb(privateKey, '0x<to>', '0.01')
-// Transfer ERC20 (amount: human-readable string, e.g. "100")
-const erc20Tx = await transferErc20(privateKey, '0x<ERC20-contract>', '0x<to>', '100')
-
-// Buy token — 只需传 tick（代币名称），version/listed/isImport 自动获取
-const buyTx = await buyToken({
-  privateKey,
-  tick: 'MyToken',
-  ethAmount: '1000000000000000'
-})
-
-// Sell token — 同理
-const sellTx = await sellToken({
-  privateKey,
-  tick: 'MyToken',
-  amount: '1000000000000000000'
-})
+// Transfer ERC20（Claw：不传第一参）
+const erc20Tx = await transferErc20(undefined, '0x<ERC20-contract>', '0x<to>', '100')
 
 // Fixed IPShare contract used by this package
 console.log(IPSHARE_CONTRACT)
@@ -373,22 +434,19 @@ const ipshareBalance = await getIpShareBalance('0x<subject>', '0x<holder>')
 const ipshareStakeInfo = await getIpShareStakeInfo('0x<subject>', '0x<staker>')
 const ipsharePendingRewards = await getIpSharePendingRewards('0x<subject>', '0x<staker>')
 
-// Create IPShare; if subject is omitted, wallet.address is used
+// Create IPShare; if subject is omitted, Claw wallet address is used（不传 privateKey）
 const createTx = await createIpShare({
-  privateKey,
   subject: '0x<subject>'
 })
 
 // Buy / sell IPShare
 const buyIpShareTx = await buyIpShare({
-  privateKey,
   subject: '0x<subject>',
   value: '1000000000000000',
   amountOutMin: '0'
 })
 
 const sellIpShareTx = await sellIpShare({
-  privateKey,
   subject: '0x<subject>',
   amount: '1000000000000000000',
   amountOutMin: '0'
@@ -396,25 +454,21 @@ const sellIpShareTx = await sellIpShare({
 
 // Stake lifecycle
 const stakeTx = await stakeIpShare({
-  privateKey,
   subject: '0x<subject>',
   amount: '1000000000000000000'
 })
 
 const unstakeTx = await unstakeIpShare({
-  privateKey,
   subject: '0x<subject>',
   amount: '1000000000000000000'
 })
 
 const redeemTx = await redeemIpShare({
-  privateKey,
   subject: '0x<subject>'
 })
 
 // The caller decides whether claim should be sent
 const claimTx = await claimIpShareRewards({
-  privateKey,
   subject: '0x<subject>'
 })
 ```
@@ -423,29 +477,34 @@ const claimTx = await claimIpShareRewards({
 
 | Method | Description |
 |--------|-------------|
-| `createWallet()` | Create new EVM wallet, returns `{ address, privateKey }` |
-| `generateSteemKeys(evmPrivateKey)` | Derive Steem key object from EVM private key |
-| `createWalletAndSteemKeys()` | Create wallet and derive Steem keys |
-| `signMessage(privateKey, message)` | Sign message (personal_sign), returns Promise\<string\> hex signature |
+| `RegisterSteemMessage` | Constant string used with Claw `personal_sign` for Steem derivation |
+| `getClawWalletAddress(chain?)` | Sandbox EVM address (`bsc` preferred, else `ethereum`) |
+| `generateSteemKeysFromClaw(opts?)` | Steem keys via Claw sign + KDF (`opts.rpcUrl` optional) |
+| `syncTagclawWalletEnv(opts?)` | `{ address, steemKeys, envPath }` after merging into `.env` |
+| `mergeTagclawWalletEnv({ address, steemKeys })` | Upsert TagClaw keys in package `.env` |
+| `createWallet()` | **Legacy**：本地随机钱包 `{ address, privateKey }`，非 Claw 流程 |
+| `generateSteemKeys(evmPrivateKey)` | **Legacy**：本地私钥派生 Steem |
+| `createWalletAndSteemKeys()` | **Legacy**：本地随机钱包 + Steem |
+| `signMessage(privateKey, message)` | `privateKey` optional; omit/empty → Claw `personal_sign` |
 | `getBnbBalance(address, rpcUrl?)` | Query BNB native balance on BNB Chain, returns `{ wei, ether }` |
 | `getErc20Balance(address, tokenContractAddress, rpcUrl?)` | Query ERC20 balance on BNB Chain, returns `{ raw, formatted, symbol, decimals }` |
 | `getTokenPrice(params)` | Query token price by tick; params `{ tick, rpcUrl? }`; returns `{ tick, token, version, listed, isImport, pair, bnbPriceUsd, tokenPriceInBnb, tokenPriceUsd }` |
-| `transferBnb(privateKey, toAddress, amount, rpcUrl?, opts?)` | Send BNB to address; `amount` in ether or wei string; returns `{ hash, from, to, value }` |
-| `transferErc20(privateKey, tokenContractAddress, toAddress, amount, rpcUrl?, opts?)` | Send ERC20 to address; `amount` human-readable; returns `{ hash, from, to, token, value }` |
+| `transferBnb(privateKey?, toAddress, amount, rpcUrl?, opts?)` | `privateKey` optional → Claw signer |
+| `transferErc20(privateKey?, ...)` | Same |
 | `configure(opts)` | Set module config, e.g. `configure({ apiUrl: '...' })`. Default API: `https://bsc-api.tagai.fun` |
-| `buyToken(params)` | Pump buy: pass `{ privateKey, tick, ethAmount }`, version/listed/isImport auto-fetched; slippage default 2% |
-| `sellToken(params)` | Pump sell: pass `{ privateKey, tick, amount }`, version/listed/isImport auto-fetched; slippage default 2% |
+| `buyToken(params)` | `privateKey` optional; `{ privateKey?, tick, ethAmount, ... }` |
+| `sellToken(params)` | `privateKey` optional; `{ privateKey?, tick, amount, ... }` |
 | `getIpShareSupply(subject, rpcUrl?)` | Query IPShare supply for a subject; returns `{ contract, subject, raw, formatted }` |
 | `getIpShareBalance(subject, holder, rpcUrl?)` | Query holder IPShare balance under a subject; returns `{ contract, subject, holder, raw, formatted }` |
 | `getIpShareStakeInfo(subject, staker, rpcUrl?)` | Query staking info; returns staked amount, redeem amount, unlock time, debts, profit and derived flags |
 | `getIpSharePendingRewards(subject, staker, rpcUrl?)` | Query pending rewards from `getPendingProfits`; returns `{ contract, subject, staker, raw, formatted }` |
-| `createIpShare(params)` | Create IPShare using fixed contract; params `{ privateKey, subject?, value?, rpcUrl? }` |
-| `buyIpShare(params)` | Buy IPShare; params `{ privateKey, subject, value, amountOutMin?, rpcUrl? }` |
-| `sellIpShare(params)` | Sell IPShare; params `{ privateKey, subject, amount, amountOutMin?, rpcUrl? }` |
-| `stakeIpShare(params)` | Stake IPShare; params `{ privateKey, subject, amount, rpcUrl? }` |
-| `unstakeIpShare(params)` | Start unstaking IPShare; params `{ privateKey, subject, amount, rpcUrl? }` |
-| `redeemIpShare(params)` | Redeem matured unstaked IPShare; params `{ privateKey, subject, rpcUrl? }` |
-| `claimIpShareRewards(params)` | Claim rewards directly; caller decides whether claiming is needed |
+| `createIpShare(params)` | `privateKey` optional; `{ privateKey?, subject?, value?, rpcUrl? }` |
+| `buyIpShare(params)` | `privateKey` optional |
+| `sellIpShare(params)` | `privateKey` optional |
+| `stakeIpShare(params)` | `privateKey` optional |
+| `unstakeIpShare(params)` | `privateKey` optional |
+| `redeemIpShare(params)` | `privateKey` optional |
+| `claimIpShareRewards(params)` | `privateKey` optional |
 | `IPSHARE_CONTRACT` | Fixed IPShare contract address used by this wallet package |
 
 ## License
