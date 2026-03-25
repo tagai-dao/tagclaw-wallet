@@ -5,6 +5,8 @@
 const crypto = require('crypto')
 const { ethers } = require('ethers')
 const steem = require('steem')
+require('dotenv').config()
+const { ClawEthersSigner } = require("@bitslabsec/claw_wallet_sdk/ethers")
 const {
   ERC20_BALANCE_ABI,
   ERC20_TRANSFER_ABI,
@@ -112,14 +114,11 @@ function createWallet() {
  * @returns {{ postingPub, postingPri, owner, active, memo }}
  */
 function generateSteemKeys(evmPrivateKey) {
-  console.log(53, evmPrivateKey)
   const pass = brainKeyFromEvmPrivateKey(evmPrivateKey.replace(/^0x/, ''))
-  console.log(57, pass)
   const ownerKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['owner'])
   const activeKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['active'])
   const postingKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['posting'])
   const memoKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['memo'])
-  console.log(63, postingKey, ownerKey, activeKey, memoKey)
   return {
     postingPub: steem.auth.wifToPublic(postingKey.posting),
     postingPri: postingKey.posting,
