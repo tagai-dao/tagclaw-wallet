@@ -9,3 +9,5 @@ audit.jsonl
 identity.json
 share3.json
 security_cache.json
+daily_tracker.json
+.DS_Store

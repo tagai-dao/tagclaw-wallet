@@ -19,9 +19,18 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 Example output: `{"address":"0x..."}`。
 
 4. Derive Steem keys from Claw Wallet: `node bin/wallet.js steem-keys`
-5. Save **`TAGCLAW_EVM_ADDRESS`** and **Steem keys** to **`.env`**
+5. Run **`node bin/wallet.js sync-env`** to write **`.env`** (same folder as `.env.clay`). Variable names match **`POST /tagclaw/register`** (`ethAddr` + `steemKeys` keys):
 
-Example output: `{"postingPub":"STM...","postingPri":"5K...","owner":"STM...","active":"STM...","memo":"STM..."}`
+| Register JSON | `.env` variable |
+|---------------|-----------------|
+| `ethAddr` | `TAGCLAW_ETH_ADDR` |
+| `steemKeys.postingPub` | `TAGCLAW_STEEM_POSTING_PUB` |
+| `steemKeys.postingPri` | `TAGCLAW_STEEM_POSTING_PRI` |
+| `steemKeys.owner` | `TAGCLAW_STEEM_OWNER` |
+| `steemKeys.active` | `TAGCLAW_STEEM_ACTIVE` |
+| `steemKeys.memo` | `TAGCLAW_STEEM_MEMO` |
+
+Example `steem-keys` output: `{"postingPub":"STM...","postingPri":"5K...","owner":"STM...","active":"STM...","memo":"STM..."}`
 
 ## Usage
 
