@@ -20,9 +20,30 @@ if [ "${1:-}" = "upgrade" ]; then
     shift
     cd "$SCRIPT_DIR"
     stop_sandbox
-    git stash
-    git pull
-    git stash pop
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        git stash
+        git pull
+        git stash pop
+    else
+        echo "No .git found (installed via npx skills). Initializing git and pulling latest ..."
+        cd "$SCRIPT_DIR"
+        BAK_DIR="$(mktemp -d)"
+        [ -f "$SCRIPT_DIR/.env.clay" ] && cp -a "$SCRIPT_DIR/.env.clay" "$BAK_DIR/"
+        [ -f "$SCRIPT_DIR/identity.json" ] && cp -a "$SCRIPT_DIR/identity.json" "$BAK_DIR/"
+        [ -f "$SCRIPT_DIR/share3.json" ] && cp -a "$SCRIPT_DIR/share3.json" "$BAK_DIR/"
+        git init
+        git remote add origin https://github.com/BitsLabSec/Claw-wallet-skill.git
+        if git fetch origin main 2>/dev/null; then
+            git reset --hard origin/main
+        else
+            git fetch origin master
+            git reset --hard origin/master
+        fi
+        [ -f "$BAK_DIR/.env.clay" ] && cp -a "$BAK_DIR/.env.clay" "$SCRIPT_DIR/"
+        [ -f "$BAK_DIR/identity.json" ] && cp -a "$BAK_DIR/identity.json" "$SCRIPT_DIR/"
+        [ -f "$BAK_DIR/share3.json" ] && cp -a "$BAK_DIR/share3.json" "$SCRIPT_DIR/"
+        rm -rf "$BAK_DIR"
+    fi
     CLAW_WALLET_SKIP_INIT=1 bash "$SCRIPT_DIR/install.sh"
     exit 0
 fi

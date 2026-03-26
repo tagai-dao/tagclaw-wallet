@@ -40,27 +40,35 @@ chmod +x "$SCRIPT_DIR/claw-wallet" 2>/dev/null || true
 # --- First-time only: wallet init (skipped when upgrade passes CLAW_WALLET_SKIP_INIT=1) ---
 do_wallet_init() {
     echo "Waiting for sandbox and initializing wallet ..."
-    for i in $(seq 1 45); do
+    for i in $(seq 1 90); do
+        CLAY_SANDBOX_URL=""
+        CLAY_AGENT_TOKEN=""
         if [ -f "$SCRIPT_DIR/.env.clay" ]; then
-            CLAY_SANDBOX_URL="$(grep -E '^CLAY_SANDBOX_URL=' "$SCRIPT_DIR/.env.clay" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")"
-            CLAY_AGENT_TOKEN="$(grep -E '^(CLAY_AGENT_TOKEN|AGENT_TOKEN)=' "$SCRIPT_DIR/.env.clay" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
-            if [ -n "${CLAY_SANDBOX_URL:-}" ] && [ -n "${CLAY_AGENT_TOKEN:-}" ]; then
-                if curl -s -f "${CLAY_SANDBOX_URL}/health" 2>/dev/null | grep -q '"status":"ok"'; then
-                    if curl -s -X POST "${CLAY_SANDBOX_URL}/api/v1/wallet/init" \
-                        -H "Authorization: Bearer ${CLAY_AGENT_TOKEN}" \
-                        -H "Content-Type: application/json" \
-                        -d '{}' 2>/dev/null | grep -qE '"uid"|"status"'; then
-                        echo "Wallet initialized."
-                    else
-                        echo "Wallet init returned (may already exist)."
-                    fi
-                    return 0
-                fi
-            fi
+            CLAY_SANDBOX_URL="$(grep -E '^CLAY_SANDBOX_URL=' "$SCRIPT_DIR/.env.clay" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r' | sed 's/[[:space:]]*$//')"
+            CLAY_AGENT_TOKEN="$(grep -E '^(CLAY_AGENT_TOKEN|AGENT_TOKEN)=' "$SCRIPT_DIR/.env.clay" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r' | sed 's/[[:space:]]*$//')"
         fi
+        if [ -z "${CLAY_SANDBOX_URL:-}" ]; then
+            REASON=".env.clay (CLAY_SANDBOX_URL)"
+        elif ! curl -s -f "${CLAY_SANDBOX_URL}/health" 2>/dev/null | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+            REASON="health ok at ${CLAY_SANDBOX_URL}"
+        elif [ -z "${CLAY_AGENT_TOKEN:-}" ]; then
+            REASON="CLAY_AGENT_TOKEN in .env.clay"
+        else
+            echo "  Calling wallet/init ..."
+            if curl -s -X POST "${CLAY_SANDBOX_URL}/api/v1/wallet/init" \
+                -H "Authorization: Bearer ${CLAY_AGENT_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d '{}' 2>/dev/null | grep -qE '"uid"|"status"'; then
+                echo "Wallet initialized."
+            else
+                echo "Wallet init returned (may already exist)."
+            fi
+            return 0
+        fi
+        [ "$(( i % 10 ))" -eq 0 ] && echo "  Still waiting for ${REASON} ... (${i}s)"
         sleep 1
     done
-    echo "Warning: .env.clay not ready after 45s. Run POST {CLAY_SANDBOX_URL}/api/v1/wallet/init manually. See SKILL.md."
+    echo "Warning: health not ok or .env.clay not ready after 90s. Check sandbox.log, then run POST {CLAY_SANDBOX_URL}/api/v1/wallet/init manually. See SKILL.md."
 }
 
 if [ "${CLAW_WALLET_SKIP_INIT:-0}" != "1" ]; then
@@ -72,5 +80,3 @@ echo "Check .env.clay for CLAY_SANDBOX_URL and CLAY_AGENT_TOKEN (or AGENT_TOKEN)
 echo "HTTP clients (curl, agents) must call protected APIs with: Authorization: Bearer <same token>."
 echo "The same value is duplicated in identity.json as agent_token. See SKILL.md section 'HTTP authentication (sandbox)'."
 echo "Sandbox binary refreshed at: $BINARY_TARGET"
-
-# Identity and config are persistent. To reset, delete .env.clay, identity.json and share3.json.
