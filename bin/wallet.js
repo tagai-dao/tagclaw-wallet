@@ -6,7 +6,6 @@
  *   bash install.sh   # Claw 沙箱 + .env.clay（在 tagclaw-wallet 目录）
  *   node bin/wallet.js claw-address
  *   node bin/wallet.js sync-env   # Claw 地址 + Steem 密钥写入同级 .env
- *   node bin/wallet.js create-wallet
  *   node bin/wallet.js steem-keys   # 默认 Claw 签名派生；可选 --private-key 走 legacy
  *   node bin/wallet.js sign --message "..."   # 默认 Claw；可选 --private-key
  *   node bin/wallet.js balance-bnb --address 0x...
@@ -24,7 +23,6 @@
  */
 const {
   configure,
-  createWallet,
   generateSteemKeys,
   generateSteemKeysFromClaw,
   signMessage,
@@ -155,7 +153,7 @@ async function main() {
 
   if (!cmd) {
     err(
-      'Usage: node bin/wallet.js <claw-address|sync-env|create-wallet|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
+      'Usage: node bin/wallet.js <claw-address|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
     )
   }
 
@@ -169,12 +167,6 @@ async function main() {
     if (cmd === 'sync-env') {
       const result = await syncTagclawWalletEnv({ rpcUrl: rpcUrl || undefined })
       out({ ...result, envPath: result.envPath })
-      return
-    }
-
-    if (cmd === 'create-wallet') {
-      const result = createWallet()
-      out(result)
       return
     }
 
@@ -394,7 +386,7 @@ async function main() {
       return
     }
 
-    err('Unknown command: ' + cmd + '. Use create-wallet | steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
+    err('Unknown command: ' + cmd + '. Use steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
   } catch (e) {
     err(e.message || String(e))
   }

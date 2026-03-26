@@ -133,15 +133,6 @@ function brainKeyFromEvmPrivateKey(evmPrivateKey) {
 }
 
 /**
- * Generate a new EVM wallet locally
- * @returns {{ address, privateKey }}
- */
-function createWallet() {
-  const wallet = ethers.Wallet.createRandom()
-  return { address: wallet.address, privateKey: wallet.privateKey }
-}
-
-/**
  * Derive Steem role keys from an EVM private key (TagClaw-compatible format)
  * @param {string} evmPrivateKey - private key starting with 0x
  * @returns {{ postingPub, postingPri, owner, active, memo }}
@@ -164,16 +155,6 @@ function steemKeysFromBrainPass(pass) {
 function generateSteemKeys(evmPrivateKey) {
   const pass = brainKeyFromEvmPrivateKey(evmPrivateKey.replace(/^0x/, ''))
   return steemKeysFromBrainPass(pass)
-}
-
-/**
- * Generate wallet + Steem keys
- * @returns {{ address, privateKey, steemKeys }}
- */
-function createWalletAndSteemKeys() {
-  const { address, privateKey } = createWallet()
-  const steemKeys = generateSteemKeys(privateKey)
-  return { address, privateKey, steemKeys }
 }
 
 /**
@@ -1590,10 +1571,8 @@ async function claimIpShareRewards(params) {
 module.exports = {
   configure,
   RegisterSteemMessage,
-  createWallet,
   generateSteemKeys,
   generateSteemKeysFromClaw,
-  createWalletAndSteemKeys,
   signMessage,
   getClawWalletAddress,
   syncTagclawWalletEnv,
