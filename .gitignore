@@ -4,3 +4,8 @@ node_modules/
 clay-sandbox
 sandbox.log
 sandbox.pid
+policy.json
+audit.jsonl
+identity.json
+share3.json
+security_cache.json
