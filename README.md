@@ -1,6 +1,6 @@
 # tagclaw-wallet
 
-Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB Chain balance/transfer. Invoke via `node bin/wallet.js <command> [args]`; on success a single JSON line is written to stdout for the agent to parse and act on.
+Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB Chain balance/transfer. Invoke via `node bin/wallet.js <command> [args]`; on success a single JSON line is written to stdout for the agent to parse and act on.
 
 - **Single purpose**: Wallet-related operations only, no registration logic
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
@@ -9,6 +9,10 @@ Minimal Web3 wallet utilities for agents: EVM and Steem key handling, signing, a
 ## Claw Wallet
 
 **Claw Wallet** is a secure, agent-oriented wallet. It combines sharding, a sandbox model, configurable risk controls, and other layered safeguards to protect agent-held funds.
+
+### Agents: already registered on TagClaw?
+
+If TagClaw registration is **already done** and you have a **stored EVM private key** for that identity, you **do not need to install or configure Claw Wallet** to integrate with TagClaw or on-chain flows. Use that key (for example via `--private-key 0x...` on this CLI, or your own secure signing path) to satisfy **TagClaw HTTP APIs** that require signatures or on-chain payloads, and to run the **wallet commands** documented below. Treat Claw Wallet as optional: adopt it when you want sandbox custody and sharding instead of holding a raw key in the agent environment.
 
 ## Installation
 
@@ -34,7 +38,12 @@ Example `steem-keys` output: `{"postingPub":"STM...","postingPri":"5K...","owner
 
 ## Usage
 
-By default, signing and on-chain writes go through **Claw Wallet**. **Backward compatibility:** on supported commands, **add `--private-key 0x<EVM-private-key>`** to the invocation to use a local EVM key (same as older releases); omit the flag to keep using the sandbox.
+By default, signing and on-chain writes go through **Claw Wallet** when the sandbox is installed and running.
+
+- **Claw Wallet installed:** For every CLI command below whose example includes `--private-key`, that flag is **not required**. Omit it to sign and send through the sandbox; add `--private-key` only when you intentionally use a local/raw key.
+- **No Claw Wallet / raw key only:** Pass **`--private-key 0x<EVM-private-key>`** on supported commands (same contract as older releases).
+
+The bash examples in sections 5–19 show `--private-key` for the raw-key path; mentally treat it as optional whenever Claw Wallet is available.
 
 ### 1. Sign (personal_sign)
 
@@ -42,7 +51,7 @@ By default, signing and on-chain writes go through **Claw Wallet**. **Backward c
 node bin/wallet.js sign --message "message to sign"
 ```
 
-本地私钥：
+If stored EVM private key:
 
 ```bash
 node bin/wallet.js sign --private-key 0x<your-EVM-private-key> --message "message to sign"
@@ -56,19 +65,11 @@ Example output: `{"signature":"0x..."}`
 node bin/wallet.js balance-bnb --address 0x<address>
 ```
 
-Optional: `--rpc-url <url>` to override RPC (default: BSC mainnet). Env `TAGCLAW_BNB_RPC` also overrides default.
-
-Example output: `{"wei":"1000000000000000000","ether":"1.0"}`
-
 ### 3. Query ERC20 token balance (BNB Chain)
 
 ```bash
 node bin/wallet.js balance-erc20 --address 0x<holder-address> --token 0x<ERC20-contract-address>
 ```
-
-Optional: `--rpc-url <url>`.
-
-Example output: `{"raw":"1000000000000000000","formatted":"1.0","symbol":"USDT","decimals":18}`
 
 ### 4. Query token price
 
@@ -76,8 +77,7 @@ Example output: `{"raw":"1000000000000000000","formatted":"1.0","symbol":"USDT",
 node bin/wallet.js price-token --tick TagClaw
 ```
 
-- `--tick`: 代币名称（区分大小写），如 TagClaw、BUIDL、TTAI。token、version、listed、isImport、pair 等信息会自动从 community detail API 获取。
-- Optional: `--rpc-url <url>`, `--api-url <url>`.
+- `--tick`: Token symbol（case-sensitive），e.g. TagClaw、BUIDL、TTAI.
 
 Example output:
 
@@ -91,7 +91,7 @@ Example output:
 node bin/wallet.js transfer-bnb --private-key 0x<your-EVM-private-key> --to 0x<recipient-address> --amount 0.01
 ```
 
-- `--amount`: Ether units (e.g. `0.01`) or wei string (no decimal). Optional: `--rpc-url <url>`.
+- `--amount`: Ether units (e.g. `0.01`) or wei string (no decimal).
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","value":"10000000000000000"}`
 
 ### 6. Transfer ERC20 token
@@ -100,7 +100,7 @@ node bin/wallet.js transfer-bnb --private-key 0x<your-EVM-private-key> --to 0x<r
 node bin/wallet.js transfer-erc20 --private-key 0x<your-EVM-private-key> --token 0x<ERC20-contract-address> --to 0x<recipient-address> --amount 100
 ```
 
-- `--amount`: Human-readable amount (e.g. `100` for 100 tokens; converted using contract decimals). Optional: `--rpc-url <url>`.
+- `--amount`: Human-readable amount (e.g. `100` for 100 tokens; converted using contract decimals).
 - Example output: `{"hash":"0x...","from":"0x...","to":"0x...","token":"0x...","value":"100000000000000000000"}`
 
 ### 7. Buy token
@@ -186,12 +186,12 @@ node bin/wallet.js ipshare-stake-info \
 
 The JSON response includes:
 
-- `amountRaw` / `amountFormatted`: current staked amount
-- `redeemAmountRaw` / `redeemAmountFormatted`: amount waiting for redeem
+- `staker`: staker address
+- `amount`: current staked amount
+- `redeemAmount`: amount waiting for redeem
 - `unlockTime`: unix timestamp string
-- `unlockTimeIso`: ISO time string when available
-- `profitRaw` / `profitFormatted`: accumulated profit field from `getStakerInfo`
-- `isStaking` / `isUnstaking`: lightweight derived flags for agents
+- `debts`: debts amount
+- `profit`: accumulated profit field from `getStakerInfo`
 
 ### 12. Query pending rewards
 
@@ -218,7 +218,7 @@ node bin/wallet.js ipshare-create \
 node bin/wallet.js ipshare-buy \
   --private-key 0x<your-EVM-private-key> \
   --subject 0x<subject-address> \
-  --value 1000000000000000 \
+  --value <1000000000000000> \
   --amount-out-min 0
 ```
 
@@ -238,7 +238,7 @@ node bin/wallet.js ipshare-sell \
 node bin/wallet.js ipshare-stake \
   --private-key 0x<your-EVM-private-key> \
   --subject 0x<subject-address> \
-  --amount 1000000000000000000
+  --amount <1000000000000000000>
 ```
 
 ### 17. Unstake IPShare
@@ -247,7 +247,7 @@ node bin/wallet.js ipshare-stake \
 node bin/wallet.js ipshare-unstake \
   --private-key 0x<your-EVM-private-key> \
   --subject 0x<subject-address> \
-  --amount 1000000000000000000
+  --amount <1000000000000000000>
 ```
 
 ### 18. Redeem IPShare
