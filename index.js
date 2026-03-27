@@ -5,10 +5,10 @@
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
-const { ethers, Transaction } = require('ethers')
+const { ethers } = require('ethers')
 const steem = require('steem')
-const { ClawEthersSigner } = require('@bitslabsec/claw_wallet_sdk/ethers')
-const { ClawSandboxClient } = require('@bitslabsec/claw_wallet_sdk')
+const { ClawEthersSigner } = require('@claw_wallet_sdk/claw_wallet/ethers')
+const { ClawSandboxClient } = require('@claw_wallet_sdk/claw_wallet')
 
 /** 与 install.sh / 沙箱写入的凭证同级：先 .env.clay 再 .env（后者可覆盖） */
 const WALLET_ROOT = path.join(__dirname)
@@ -282,24 +282,10 @@ async function resolveWriteSigner(privateKey, rpcUrl = DEFAULT_BNB_RPC) {
 }
 
 /**
- * 钱包写链统一路径：populateTransaction → signTransaction → broadcastTransaction。
- * 与 sendTransaction 语义等价；Claw 沙箱仅在签名阶段介入，广播为独立 RPC 步骤。
- * @param {import('ethers').Signer} signer
- * @param {import('ethers').TransactionRequest} txLike
- * @returns {Promise<import('ethers').TransactionResponse>}
+ * 写链统一走 ethers 标准路径：合约方法或 signer.sendTransaction。
+ * AbstractSigner.sendTransaction 内部为 populateTransaction → signTransaction → broadcastTransaction；
+ * ClawEthersSigner 在 signTransaction 阶段走沙箱签名，行为与本地 Wallet 一致。
  */
-async function signThenBroadcast(signer, txLike) {
-  const provider = signer.provider
-  if (!provider) {
-    throw new Error('signThenBroadcast: signer must have a connected provider')
-  }
-  let populated = await signer.populateTransaction(txLike)
-  delete populated.from
-  const serialized = await signer.signTransaction(populated)
-  const parsed = Transaction.from(serialized);
-  const recoveredFrom = parsed.from ?? "";
-  return provider.broadcastTransaction(serialized)
-}
 
 /** Claw + RegisterSteemMessage 派生 Steem（无需本地 EVM 私钥） */
 async function generateSteemKeysFromClaw(opts = {}) {
@@ -321,6 +307,20 @@ async function getClawWalletAddress(chain) {
     return client.getRequiredAddress(chain)
   }
   return getBscOrEthAddress(client)
+}
+
+
+/**
+ * 由沙箱对 challenge 哈希签名并经由 relay 完成「绑定代理钱包」（参见 BitsLabSec claw_wallet_sdk WalletBind 示例）
+ * @param {string} messageHashHex - 后端/页面下发的 message_hash_hex
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function bindClawWallet(messageHashHex) {
+  const message_hash_hex = messageHashHex
+  const cfg = loadClawConfig()
+  assertClawConfig(cfg)
+  const client = new ClawSandboxClient(clawSignerConfig(cfg))
+  return client.bindWallet({ message_hash_hex })
 }
 
 function formatEnvLine(key, value) {
@@ -455,7 +455,7 @@ async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_R
     ? ethers.parseEther(amount)
     : BigInt(amount)
 
-  const tx = await signThenBroadcast(wallet, {
+  const tx = await wallet.sendTransaction({
     to: toAddress,
     value: valueWei,
     ...(opts.gasLimit != null && { gasLimit: opts.gasLimit })
@@ -485,8 +485,7 @@ async function transferErc20(privateKey, tokenContractAddress, toAddress, amount
   const decimals = await contract.decimals()
   const amountRaw = ethers.parseUnits(amount, decimals)
   const transferOverrides = opts.gasLimit != null ? { gasLimit: opts.gasLimit } : {}
-  const partial = await contract.transfer.populateTransaction(toAddress, amountRaw, transferOverrides)
-  const tx = await signThenBroadcast(wallet, partial)
+  const tx = await contract.transfer(toAddress, amountRaw, transferOverrides)
   const receipt = await tx.wait()
   return {
     hash: receipt.hash,
@@ -659,8 +658,7 @@ async function ensureAllowance(token, owner, spender, amount, signer) {
   if (allowance >= amount) {
     return { approved: false, hash: null }
   }
-  const partial = await tokenContract.approve.populateTransaction(spender, MAX_UINT256)
-  const tx = await signThenBroadcast(signer, partial)
+  const tx = await tokenContract.approve(spender, MAX_UINT256)
   const receipt = await tx.wait()
   return { approved: true, hash: receipt.hash }
 }
@@ -942,7 +940,7 @@ async function buyToken(params) {
 
       if (isImport) {
         const wrap = new ethers.Contract(WRAP_SWAPER2, WRAP_SWAPER2_ABI, wallet)
-        const partial = await wrap.buyToken.populateTransaction(
+        const tx = await wrap.buyToken(
           sellsmanAddr,
           amountOutMin,
           [WETH, token],
@@ -951,7 +949,6 @@ async function buyToken(params) {
           UNISWAP_V2_ROUTER,
           { value: ethAmountBn }
         )
-        const tx = await signThenBroadcast(wallet, partial)
         const receipt = await tx.wait()
         return {
           hash: receipt.hash,
@@ -964,7 +961,7 @@ async function buyToken(params) {
       const wrap = new ethers.Contract(WRAP_SWAPER, WRAP_SWAPER_ABI, wallet)
       const ipshare = Number(version) === 1 ? IPSHARE1 : IPSHARE2
 
-      const partial = await wrap.buyToken.populateTransaction(
+      const tx = await wrap.buyToken(
         sellsmanAddr,
         amountOutMin,
         [WETH, token],
@@ -973,7 +970,6 @@ async function buyToken(params) {
         ipshare,
         { value: ethAmountBn }
       )
-      const tx = await signThenBroadcast(wallet, partial)
       const receipt = await tx.wait()
       return {
         hash: receipt.hash,
@@ -990,14 +986,13 @@ async function buyToken(params) {
 
     if (Number(version) === 1) {
       const contract = new ethers.Contract(token, TOKEN1_BUY_ABI, wallet)
-      const partial = await contract.buyToken.populateTransaction(
+      const tx = await contract.buyToken(
         expectedAmount,
         sellsmanAddr,
         slippageBps,
         ZERO_ADDRESS,
         { value: ethAmountBn }
       )
-      const tx = await signThenBroadcast(wallet, partial)
       const receipt = await tx.wait()
       return { hash: receipt.hash, route: 'unlisted-token1-buy', expectedAmount: expectedAmount.toString() }
     }
@@ -1007,26 +1002,19 @@ async function buyToken(params) {
         throwWalletError('INVALID_SIGNATURE_FOR_V5_UNLISTED', 'version=5 and listed=false requires signature')
       }
       const contract = new ethers.Contract(token, TOKEN5_BUY_ABI, wallet)
-      const partial = await contract.buyToken.populateTransaction(
+      const tx = await contract.buyToken(
         expectedAmount,
         sellsmanAddr,
         slippageBps,
         signature,
         { value: ethAmountBn }
       )
-      const tx = await signThenBroadcast(wallet, partial)
       const receipt = await tx.wait()
       return { hash: receipt.hash, route: 'unlisted-token5-buy', expectedAmount: expectedAmount.toString() }
     }
 
     const contract = new ethers.Contract(token, TOKEN_BUY_ABI, wallet)
-    const partial = await contract.buyToken.populateTransaction(
-      expectedAmount,
-      sellsmanAddr,
-      slippageBps,
-      { value: ethAmountBn }
-    )
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.buyToken(expectedAmount, sellsmanAddr, slippageBps, { value: ethAmountBn })
     const receipt = await tx.wait()
     return { hash: receipt.hash, route: 'unlisted-tokenN-buy', expectedAmount: expectedAmount.toString() }
   } catch (e) {
@@ -1088,7 +1076,7 @@ async function sellToken(params) {
 
       if (isImport) {
         const wrap = new ethers.Contract(WRAP_SWAPER2, WRAP_SWAPER2_ABI, wallet)
-        const partial = await wrap.sellToken.populateTransaction(
+        const tx = await wrap.sellToken(
           amountBn,
           amountOutMin,
           [token, WETH],
@@ -1097,7 +1085,6 @@ async function sellToken(params) {
           sellsmanAddr,
           UNISWAP_V2_ROUTER
         )
-        const tx = await signThenBroadcast(wallet, partial)
         const receipt = await tx.wait()
         return {
           hash: receipt.hash,
@@ -1110,7 +1097,7 @@ async function sellToken(params) {
 
       const wrap = new ethers.Contract(WRAP_SWAPER, WRAP_SWAPER_ABI, wallet)
       const ipshare = Number(version) === 1 ? IPSHARE1 : IPSHARE2
-      const partial = await wrap.sellToken.populateTransaction(
+      const tx = await wrap.sellToken(
         amountBn,
         amountOutMin,
         [token, WETH],
@@ -1119,7 +1106,6 @@ async function sellToken(params) {
         sellsmanAddr,
         ipshare
       )
-      const tx = await signThenBroadcast(wallet, partial)
       const receipt = await tx.wait()
       return {
         hash: receipt.hash,
@@ -1137,13 +1123,7 @@ async function sellToken(params) {
     }
 
     const contract = new ethers.Contract(token, TOKEN_SELL_ABI, wallet)
-    const partial = await contract.sellToken.populateTransaction(
-      amountBn,
-      expectedReceive,
-      sellsmanAddr,
-      slippageBps
-    )
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.sellToken(amountBn, expectedReceive, sellsmanAddr, slippageBps)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1285,8 +1265,7 @@ async function createIpShare(params) {
     }
     await ensureNativeBalance(provider, wallet.address, valueBn, 'create ipshare requires payable value')
 
-    const partial = await contract.createShare.populateTransaction(subjectAddr, { value: valueBn })
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.createShare(subjectAddr, { value: valueBn })
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1330,13 +1309,7 @@ async function buyIpShare(params) {
   try {
     const contract = getIpShareContract(wallet)
     const expectedAmount = await contract.buyShares.staticCall(subjectAddr, wallet.address, amountOutMinBn, { value: valueBn })
-    const partial = await contract.buyShares.populateTransaction(
-      subjectAddr,
-      wallet.address,
-      amountOutMinBn,
-      { value: valueBn }
-    )
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.buyShares(subjectAddr, wallet.address, amountOutMinBn, { value: valueBn })
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1382,8 +1355,7 @@ async function sellIpShare(params) {
   try {
     const contract = getIpShareContract(wallet)
     const expectedReceive = await contract.getSellPriceAfterFee(subjectAddr, amountBn)
-    const partial = await contract.sellShares.populateTransaction(subjectAddr, amountBn, amountOutMinBn)
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.sellShares(subjectAddr, amountBn, amountOutMinBn)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1425,8 +1397,7 @@ async function stakeIpShare(params) {
 
   try {
     const contract = getIpShareContract(wallet)
-    const partial = await contract.stake.populateTransaction(subjectAddr, amountBn)
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.stake(subjectAddr, amountBn)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1474,8 +1445,7 @@ async function unstakeIpShare(params) {
     }
 
     const contract = getIpShareContract(wallet)
-    const partial = await contract.unstake.populateTransaction(subjectAddr, amountBn)
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.unstake(subjectAddr, amountBn)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1514,8 +1484,7 @@ async function redeemIpShare(params) {
     const redeemAmount = BigInt(stakeInfo.redeemAmount)
 
     const contract = getIpShareContract(wallet)
-    const partial = await contract.redeem.populateTransaction(subjectAddr)
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.redeem(subjectAddr)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1553,8 +1522,7 @@ async function claimIpShareRewards(params) {
     const pendingRewards = await readContract.getPendingProfits(subjectAddr, wallet.address)
 
     const contract = getIpShareContract(wallet)
-    const partial = await contract.claim.populateTransaction(subjectAddr)
-    const tx = await signThenBroadcast(wallet, partial)
+    const tx = await contract.claim(subjectAddr)
     const receipt = await tx.wait()
     return {
       hash: receipt.hash,
@@ -1575,6 +1543,7 @@ module.exports = {
   generateSteemKeysFromClaw,
   signMessage,
   getClawWalletAddress,
+  bindClawWallet,
   syncTagclawWalletEnv,
   mergeTagclawWalletEnv,
   getBnbBalance,

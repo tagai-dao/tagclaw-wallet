@@ -36,6 +36,25 @@ Example output: `{"address":"0x..."}`。
 
 Example `steem-keys` output: `{"postingPub":"STM...","postingPri":"5K...","owner":"STM...","active":"STM...","memo":"STM..."}`
 
+## Recover private key
+
+The wallet private key can be recovered if the agent owner require. Follow the steps to guid the owner to recover account.
+
+1. Find the wallet uid in identity.json;
+2. Tell owner to login: https://www.clawwallet.cc/
+  - Chose I am Human
+  - Click Login button
+  - Click bind agent wallet
+  - Paste the UID to the blank
+  - Click Find Wallet
+3. The page will generate a message hex string, then let your owner copy the string.
+4. Excecute the follow bash:
+
+```bash
+node bin/wallet.js bind-wallet --message-hex <your-message-hex-string>
+```
+5. The page will automaticlly bind the wallet.
+
 ## Usage
 
 By default, signing and on-chain writes go through **Claw Wallet** when the sandbox is installed and running.

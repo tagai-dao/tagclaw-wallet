@@ -5,6 +5,7 @@
  * Usage:
  *   bash install.sh   # Claw 沙箱 + .env.clay（在 tagclaw-wallet 目录）
  *   node bin/wallet.js claw-address
+ *   node bin/wallet.js bind-wallet --message-hex <64-hex-from-bind-page>
  *   node bin/wallet.js sync-env   # Claw 地址 + Steem 密钥写入同级 .env
  *   node bin/wallet.js steem-keys   # 默认 Claw 签名派生；可选 --private-key 走 legacy
  *   node bin/wallet.js sign --message "..."   # 默认 Claw；可选 --private-key
@@ -27,6 +28,7 @@ const {
   generateSteemKeysFromClaw,
   signMessage,
   getClawWalletAddress,
+  bindClawWallet,
   syncTagclawWalletEnv,
   getBnbBalance,
   getErc20Balance,
@@ -61,6 +63,7 @@ function err(msg) {
 function parseArgs() {
   const args = process.argv.slice(2)
   const cmd = args[0]
+  let bindMessageHash = ''
   let privateKey = ''
   let message = ''
   let address = ''
@@ -100,6 +103,10 @@ function parseArgs() {
     else if (args[i] === '--value' && args[i + 1]) value = args[++i]
     else if (args[i] === '--amount-out-min' && args[i + 1]) amountOutMin = args[++i]
     else if (args[i] === '--chain' && args[i + 1]) chain = args[++i]
+    else if (args[i] === '--message-hex') {
+      i++
+      bindMessageHash = args[i] !== undefined ? String(args[i]).trim() : ''
+    }
   }
   return {
     cmd,
@@ -121,7 +128,8 @@ function parseArgs() {
     staker,
     value,
     amountOutMin,
-    chain
+    chain,
+    bindMessageHash
   }
 }
 
@@ -146,14 +154,15 @@ async function main() {
     staker,
     value,
     amountOutMin,
-    chain
+    chain,
+    bindMessageHash
   } = parseArgs()
 
   if (apiUrl) configure({ apiUrl })
 
   if (!cmd) {
     err(
-      'Usage: node bin/wallet.js <claw-address|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
+      'Usage: node bin/wallet.js <claw-address|bind-wallet|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
     )
   }
 
@@ -161,6 +170,17 @@ async function main() {
     if (cmd === 'claw-address') {
       const address = await getClawWalletAddress(chain || undefined)
       out(chain ? { address, chain } : { address })
+      return
+    }
+
+    if (cmd === 'bind-wallet') {
+      if (!bindMessageHash) {
+        err(
+          'bind-wallet requires --message-hex <64-hex>: paste the string from clawwallet.cc bind page, e.g. node bin/wallet.js bind-wallet --message-hex 41cde59663fe4d1755e60f0392434ac43dea609310ae5e8a9209ce41f268f67d'
+        )
+      }
+      const result = await bindClawWallet(bindMessageHash)
+      out(result)
       return
     }
 
@@ -386,7 +406,13 @@ async function main() {
       return
     }
 
-    err('Unknown command: ' + cmd + '. Use steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' + IPSHARE_CONTRACT + ')')
+    err(
+      'Unknown command: ' +
+        cmd +
+        '. Use claw-address | bind-wallet | steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' +
+        IPSHARE_CONTRACT +
+        ')'
+    )
   } catch (e) {
     err(e.message || String(e))
   }
