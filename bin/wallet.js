@@ -3,7 +3,7 @@
  * tagclaw-wallet CLI — wallet-only capabilities with JSON output for agent parsing
  *
  * Usage:
- *   bash install.sh   # Claw 沙箱 + .env.clay（在 tagclaw-wallet 目录）
+ *   # Claw 沙箱：按 README 从 Claw-Wallet-Skill 下载脚本后 bash install.sh（在 tagclaw-wallet 目录）
  *   node bin/wallet.js claw-address
  *   node bin/wallet.js bind-wallet --message-hex <64-hex-from-bind-page>
  *   node bin/wallet.js sync-env   # Claw 地址 + Steem 密钥写入同级 .env

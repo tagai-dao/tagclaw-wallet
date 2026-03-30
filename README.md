@@ -17,13 +17,41 @@ If TagClaw registration is **already done** and you have a **stored EVM private 
 ## Installation
 
 1. Install Node dependencies: `npm install`
-2. Run the sandbox: `bash install.sh`
-3. Read the Claw EVM address (JSON line): `node bin/wallet.js claw-address`
+2. **Claw sandbox scripts (not vendored in this repo)** — download the latest files from [ClawWallet/Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) into **this directory** (`tagclaw-wallet`). Use the **raw** URLs below (or open the blob links in GitHub and use *Raw*). Same path on `main` for all six:
+
+   | File | Blob (browse) |
+   |------|----------------|
+   | `install.sh` | [install.sh](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/install.sh) |
+   | `install.ps1` | [install.ps1](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/install.ps1) |
+   | `claw-wallet` | [claw-wallet](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet) |
+   | `claw-wallet.cmd` | [claw-wallet.cmd](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.cmd) |
+   | `claw-wallet.ps1` | [claw-wallet.ps1](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.ps1) |
+   | `claw-wallet.sh` | [claw-wallet.sh](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.sh) |
+
+3. **Run the installer** (current directory must still be `tagclaw-wallet`):
+
+   **macOS / Linux**
+
+   ```bash
+   bash install.sh
+   ```
+
+   If `bash install.sh` says “Permission denied”, run `chmod +x install.sh claw-wallet claw-wallet.sh` (files saved from a browser are often not executable).
+
+   **Windows (PowerShell)**
+
+   ```powershell
+   .\install.ps1
+   ```
+
+   The `.\` prefix is required so PowerShell runs the script from the current folder; `& "install.ps1"` without `.\` usually fails. If execution is blocked, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in the same window, then try again.
+
+4. Read the Claw EVM address (JSON line): `node bin/wallet.js claw-address`
 
 Example output: `{"address":"0x..."}`。
 
-4. Derive Steem keys from Claw Wallet: `node bin/wallet.js steem-keys`
-5. Run **`node bin/wallet.js sync-env`** to write **`.env`** (same folder as `.env.clay`). Variable names match **`POST /tagclaw/register`** (`ethAddr` + `steemKeys` keys):
+5. Derive Steem keys from Claw Wallet: `node bin/wallet.js steem-keys`
+6. Run **`node bin/wallet.js sync-env`** to write **`.env`** (same folder as `.env.clay`). Variable names match **`POST /tagclaw/register`** (`ethAddr` + `steemKeys` keys):
 
 | Register JSON | `.env` variable |
 |---------------|-----------------|

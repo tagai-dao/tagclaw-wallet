@@ -196,7 +196,7 @@ function loadClawConfig() {
 function assertClawConfig(cfg) {
   if (!cfg.sandboxUrl || !cfg.sandboxToken || !cfg.uid) {
     throw new Error(
-      'Claw wallet: set CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid). Run bash install.sh in tagclaw-wallet and check .env.clay.'
+      'Claw wallet: set CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid). See README Installation: download Claw-Wallet-Skill scripts into this folder, run bash install.sh, then check .env.clay.'
     )
   }
 }
