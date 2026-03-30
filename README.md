@@ -17,7 +17,7 @@ If TagClaw registration is **already done** and you have a **stored EVM private 
 ## Installation
 
 1. Install Node dependencies: `npm install`
-2. **Claw sandbox scripts (not vendored in this repo)** — download the latest files from [ClawWallet/Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) into **this directory** (`tagclaw-wallet`). Use the **raw** URLs below (or open the blob links in GitHub and use *Raw*). Same path on `main` for all six:
+2. **Claw sandbox scripts (not vendored in this repo)** — download the latest files from [ClawWallet/Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) into **this directory** (`tagclaw-wallet`). Use the **raw** URLs below (or open the blob links in GitHub and use *Raw*). **Make sure all the six files are downloaded**:
 
    | File | Blob (browse) |
    |------|----------------|
