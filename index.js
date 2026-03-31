@@ -1,12 +1,13 @@
 /**
  * tagclaw-wallet — minimal wallet utilities for local Agent usage
- * Dependencies: ethers, steem (no js-sha256/bs58; uses Node crypto + inline base58)
+ * Dependencies: ethers, @steemit/steem-js（Steem auth；Node crypto + 内联 base58）
  */
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const { ethers } = require('ethers')
-const steem = require('steem')
+// 只引 auth：主包入口会加载 api → http → debug，而 npm 包未声明 debug，干净安装会报错
+const steemAuth = require('@steemit/steem-js/lib/auth')
 const { ClawEthersSigner } = require('@claw_wallet_sdk/claw_wallet/ethers')
 const { ClawSandboxClient } = require('@claw_wallet_sdk/claw_wallet')
 
@@ -138,16 +139,16 @@ function brainKeyFromEvmPrivateKey(evmPrivateKey) {
  * @returns {{ postingPub, postingPri, owner, active, memo }}
  */
 function steemKeysFromBrainPass(pass) {
-  const ownerKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['owner'])
-  const activeKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['active'])
-  const postingKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['posting'])
-  const memoKey = steem.auth.getPrivateKeys(STEEM_USERNAME, pass, ['memo'])
+  const ownerKey = steemAuth.getPrivateKeys(STEEM_USERNAME, pass, ['owner'])
+  const activeKey = steemAuth.getPrivateKeys(STEEM_USERNAME, pass, ['active'])
+  const postingKey = steemAuth.getPrivateKeys(STEEM_USERNAME, pass, ['posting'])
+  const memoKey = steemAuth.getPrivateKeys(STEEM_USERNAME, pass, ['memo'])
   return {
-    postingPub: steem.auth.wifToPublic(postingKey.posting),
+    postingPub: steemAuth.wifToPublic(postingKey.posting),
     postingPri: postingKey.posting,
-    owner: steem.auth.wifToPublic(ownerKey.owner),
-    active: steem.auth.wifToPublic(activeKey.active),
-    memo: steem.auth.wifToPublic(memoKey.memo)
+    owner: steemAuth.wifToPublic(ownerKey.owner),
+    active: steemAuth.wifToPublic(activeKey.active),
+    memo: steemAuth.wifToPublic(memoKey.memo)
   }
 }
 
