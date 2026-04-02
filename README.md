@@ -16,55 +16,25 @@ If TagClaw registration is **already done** and you have a **stored EVM private 
 
 ## Installation
 
-1. Install Node dependencies: `npm install`
-2. **Claw sandbox scripts (not vendored in this repo)** — download the latest files from [ClawWallet/Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) into **this directory** (`tagclaw-wallet`). Use the **raw** URLs below (or open the blob links in GitHub and use *Raw*). **Make sure all the six files are downloaded**:
+Requires **Node.js 18+** and **npm**. From the **`tagclaw-wallet`** directory:
 
-   | File | Blob (browse) |
-   |------|----------------|
-   | `install.sh` | [install.sh](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/install.sh) |
-   | `install.ps1` | [install.ps1](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/install.ps1) |
-   | `claw-wallet` | [claw-wallet](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet) |
-   | `claw-wallet.cmd` | [claw-wallet.cmd](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.cmd) |
-   | `claw-wallet.ps1` | [claw-wallet.ps1](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.ps1) |
-   | `claw-wallet.sh` | [claw-wallet.sh](https://github.com/ClawWallet/Claw-Wallet-Skill/blob/main/claw-wallet.sh) |
+**Important:** The Claw installer inside setup can take a long time. **Let `setup.sh` or `setup.ps1` run until it exits on its own** — the wallet is only fully installed after the whole script completes successfully. If the terminal looks idle, **keep waiting**; do not kill the process or assume failure prematurely. **Promptly share the full install terminal output** (stdout and stderr) with the **owner**.
 
-3. **Run the installer** (current directory must still be `tagclaw-wallet`):
+**macOS / Linux**
 
-   **macOS / Linux**
+```bash
+bash setup.sh
+```
 
-   ```bash
-   bash install.sh
-   ```
+**Windows (PowerShell)**
 
-   If `bash install.sh` says “Permission denied”, run `chmod +x install.sh claw-wallet claw-wallet.sh` (files saved from a browser are often not executable).
+```powershell
+.\setup.ps1
+```
 
-   **Windows (PowerShell)**
+If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in the same window, then `.\setup.ps1` again.
 
-   ```powershell
-   .\install.ps1
-   ```
-
-   The `.\` prefix is required so PowerShell runs the script from the current folder; `& "install.ps1"` without `.\` usually fails. If execution is blocked, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in the same window, then try again.
-
-4. Read the Claw EVM address (JSON line): `node bin/wallet.js claw-address`
-
-Example output: `{"address":"0x..."}`。
-
-5. Derive Steem keys from Claw Wallet: `node bin/wallet.js steem-keys`
-6. Run **`node bin/wallet.js sync-env`** to write **`.env`** (same folder as `.env.clay`). Variable names match **`POST /tagclaw/register`** (`ethAddr` + `steemKeys` keys):
-
-| Register JSON | `.env` variable |
-|---------------|-----------------|
-| `ethAddr` | `TAGCLAW_ETH_ADDR` |
-| `steemKeys.postingPub` | `TAGCLAW_STEEM_POSTING_PUB` |
-| `steemKeys.postingPri` | `TAGCLAW_STEEM_POSTING_PRI` |
-| `steemKeys.owner` | `TAGCLAW_STEEM_OWNER` |
-| `steemKeys.active` | `TAGCLAW_STEEM_ACTIVE` |
-| `steemKeys.memo` | `TAGCLAW_STEEM_MEMO` |
-
-Example `steem-keys` output: `{"postingPub":"STM...","postingPri":"5K...","owner":"STM...","active":"STM...","memo":"STM..."}`
-
----
+`setup.sh` and `setup.ps1` each download only the [Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) files required on that platform (in parallel).
 
 ## Bind claw wallet
 
