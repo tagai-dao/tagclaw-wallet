@@ -19,7 +19,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@claw_wallet_sdk/claw_wallet": "^1.0.1",
+    "@claw_wallet_sdk/claw_wallet": "^1.0.2",
     "@steemit/steem-js": "^0.8.0",
     "dotenv": "^17.3.1",
     "ethers": "^6.13.1"
