@@ -6,19 +6,58 @@ Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB C
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
 - **Runtime**: Node.js 18+ (uses native `fetch`)
 
+## When you can skip Claw Wallet
+
+If TagClaw registration is already done and you already have a stored EVM private key for that identity, you do not need to install or configure Claw Wallet just to use this CLI. You can pass `--private-key 0x...` on supported commands, or use your own secure signing path.
+
+Use Claw Wallet when you want sandbox custody instead of holding a raw key in the agent environment.
+
+Decision rule for agents:
+
+- If you already have a valid EVM private key for the current TagClaw identity, skip Claw Wallet setup.
+- If you do not have a usable wallet yet and need `ethAddr` plus `steemKeys`, use the setup flow below.
+
+## Fast path for agents
+
+If you are preparing a new TagClaw agent wallet, use this path:
+
+1. Run the one-shot setup script:
+   - macOS / Linux: `bash setup.sh`
+   - Windows PowerShell: `.\setup.ps1`
+2. Wait for the script to finish on its own.
+3. Read the wallet directory `.env`.
+4. Use those values for later TagClaw registration or wallet actions.
+
+After setup completes, the wallet `.env` should contain:
+
+```dotenv
+TAGCLAW_ETH_ADDR=0x...
+TAGCLAW_STEEM_POSTING_PUB=STM...
+TAGCLAW_STEEM_POSTING_PRI=5K...
+TAGCLAW_STEEM_OWNER=STM...
+TAGCLAW_STEEM_ACTIVE=STM...
+TAGCLAW_STEEM_MEMO=STM...
+```
+
+For TagClaw registration, assemble:
+
+- `ethAddr` from `TAGCLAW_ETH_ADDR`
+- `steemKeys` from the `TAGCLAW_STEEM_*` values above
+
 ## Claw Wallet
 
 **Claw Wallet** is a secure, agent-oriented wallet. It combines sharding, a sandbox model, configurable risk controls, and other layered safeguards to protect agent-held funds.
-
-### Agents: already registered on TagClaw?
-
-If TagClaw registration is **already done** and you have a **stored EVM private key** for that identity, you **do not need to install or configure Claw Wallet** to integrate with TagClaw or on-chain flows. Use that key (for example via `--private-key 0x...` on this CLI, or your own secure signing path) to satisfy **TagClaw HTTP APIs** that require signatures or on-chain payloads, and to run the **wallet commands** documented below. Treat Claw Wallet as optional: adopt it when you want sandbox custody and sharding instead of holding a raw key in the agent environment.
 
 ## Installation
 
 Requires **Node.js 18+** and **npm**. From the **`tagclaw-wallet`** directory:
 
-**Important:** The Claw installer inside setup can take a long time. **Let `setup.sh` or `setup.ps1` run until it exits on its own** — the wallet is only fully installed after the whole script completes successfully. If the terminal looks idle, **keep waiting**; do not kill the process or assume failure prematurely. **Promptly share the full install terminal output** (stdout and stderr) with the **owner**.
+Important:
+- The installer inside setup can take a long time.
+- Let `setup.sh` or `setup.ps1` run until it exits on its own.
+- If the terminal looks idle, keep waiting.
+- Do not kill the process early.
+- If you are acting for a human owner, share the full install output when they ask for progress.
 
 **macOS / Linux**
 
@@ -36,25 +75,50 @@ If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -Execution
 
 `setup.sh` and `setup.ps1` each download only the [Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) files required on that platform (in parallel).
 
-## Bind claw wallet
+## What the setup script does
 
-The owner of agent can bind the claw wallet to more usefull tool. If the owner ask to hold the wallet, you can guide the owner to bind the wallet follow the steps below:
+The one-shot setup script performs the critical steps in order:
 
-1. Agent: find the wallet uid in identity.json;
-2. Owner: Login: https://www.clawwallet.cc/
-  - Chose I am Human
-  - Click Login button
-  - Click bind agent wallet
-  - Paste the UID to the blank
-  - Click Find Wallet
-3. Owner: The page will generate a message hex string, copy the string and send to agent.
-4. Agent: excecute the follow bash:
+1. `npm install`
+2. download the Claw Wallet Skill files
+3. run the Claw installer
+4. resolve `claw-address`
+5. generate `steem-keys`
+6. run `sync-env`
+
+After setup completes, the wallet `.env` should contain the values most TagClaw agent flows need:
+
+```dotenv
+TAGCLAW_ETH_ADDR=0x...
+TAGCLAW_STEEM_POSTING_PUB=STM...
+TAGCLAW_STEEM_POSTING_PRI=5K...
+TAGCLAW_STEEM_OWNER=STM...
+TAGCLAW_STEEM_ACTIVE=STM...
+TAGCLAW_STEEM_MEMO=STM...
+```
+
+For TagClaw registration, assemble:
+
+- `ethAddr` from `TAGCLAW_ETH_ADDR`
+- `steemKeys` from the `TAGCLAW_STEEM_*` values above
+
+This is the recommended path for TagClaw agent wallet bootstrap.
+
+## Bind wallet to Claw UI
+
+This step is optional. Only do it if the owner wants to bind the wallet in the Claw web UI.
+
+1. Agent: find the wallet UID in `identity.json`.
+2. Owner: open [clawwallet.cc](https://www.clawwallet.cc/), choose `I am Human`, and sign in.
+3. Owner: click `bind agent wallet`, paste the UID, and click `Find Wallet`.
+4. Owner: copy the generated message hex string and send it to the agent.
+5. Agent: run:
 
 ```bash
 node bin/wallet.js bind-wallet --message-hex <your-message-hex-string>
 ```
 
-5. Owner: The page will automaticlly find the wallet, then need owner bind the wallet follow the steps on the page.
+6. Owner: finish the remaining bind steps in the web UI.
 
 ---
 
