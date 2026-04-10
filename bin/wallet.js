@@ -15,7 +15,10 @@
  *   node bin/wallet.js transfer-erc20 --private-key 0x... --token 0x... --to 0x... --amount 100
  *   node bin/wallet.js buy-token --private-key 0x... --tick MyToken --eth-amount 1000000000000000
  *   node bin/wallet.js sell-token --private-key 0x... --tick MyToken --amount 1000000000000000000
+ *   node bin/wallet.js create-community --tick MyToken --quote-only
  *   node bin/wallet.js price-token --tick TagClaw
+ *   node bin/wallet.js nutbox-community --ctoken 0x...
+ *   node bin/wallet.js nutbox-pool --pool 0x...
  *   node bin/wallet.js ipshare-supply --subject 0x...
  *   node bin/wallet.js ipshare-buy --private-key 0x... --subject 0x... --value 1000000000000000
  *   node bin/wallet.js ipshare-claim --private-key 0x... --subject 0x...
@@ -23,7 +26,6 @@
  * On success, outputs exactly one JSON line to stdout; errors go to stderr and exit with code 1.
  */
 const {
-  configure,
   generateSteemKeys,
   generateSteemKeysFromClaw,
   signMessage,
@@ -37,6 +39,23 @@ const {
   transferErc20,
   buyToken,
   sellToken,
+  createCommunity,
+  getNutboxCommunity,
+  getNutboxPool,
+  getNutboxFactories,
+  getNutboxCommitteeFees,
+  addNutboxErc20StakingPool,
+  addNutboxErc20LockingPool,
+  addNutboxErc1155Pool,
+  setNutboxPoolRatios,
+  claimNutboxRewards,
+  depositNutboxErc20Pool,
+  withdrawNutboxErc20Pool,
+  redeemNutboxErc20Locking,
+  depositNutboxErc1155Pool,
+  withdrawNutboxErc1155Pool,
+  harvestNutboxSocialPool,
+  claimNutboxSocialPool,
   getIpShareSupply,
   getIpShareBalance,
   getIpShareStakeInfo,
@@ -64,6 +83,7 @@ function parseArgs() {
   const args = process.argv.slice(2)
   const cmd = args[0]
   let bindMessageHash = ''
+  let tagclawApiKey = ''
   let privateKey = ''
   let message = ''
   let address = ''
@@ -83,6 +103,20 @@ function parseArgs() {
   let value = ''
   let amountOutMin = ''
   let chain = ''
+  let community = ''
+  let ctoken = ''
+  let committee = ''
+  let pool = ''
+  let name = ''
+  let stakeToken = ''
+  let lockDuration = ''
+  let tokenId = ''
+  let pools = ''
+  let ratios = ''
+  let orderId = ''
+  let deadline = ''
+  let salt = ''
+  let quoteOnly = false
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--private-key' && args[i + 1]) privateKey = args[++i]
     else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
@@ -91,6 +125,7 @@ function parseArgs() {
     else if (args[i] === '--tick' && args[i + 1]) tick = args[++i]
     else if (args[i] === '--rpc-url' && args[i + 1]) rpcUrl = args[++i]
     else if (args[i] === '--api-url' && args[i + 1]) apiUrl = args[++i]
+    else if (args[i] === '--tagclaw-api-key' && args[i + 1]) tagclawApiKey = args[++i]
     else if (args[i] === '--to' && args[i + 1]) to = args[++i]
     else if (args[i] === '--amount' && args[i + 1]) amount = args[++i]
     else if (args[i] === '--sellsman' && args[i + 1]) sellsman = args[++i]
@@ -103,6 +138,20 @@ function parseArgs() {
     else if (args[i] === '--value' && args[i + 1]) value = args[++i]
     else if (args[i] === '--amount-out-min' && args[i + 1]) amountOutMin = args[++i]
     else if (args[i] === '--chain' && args[i + 1]) chain = args[++i]
+    else if (args[i] === '--community' && args[i + 1]) community = args[++i]
+    else if (args[i] === '--ctoken' && args[i + 1]) ctoken = args[++i]
+    else if (args[i] === '--committee' && args[i + 1]) committee = args[++i]
+    else if (args[i] === '--pool' && args[i + 1]) pool = args[++i]
+    else if (args[i] === '--name' && args[i + 1]) name = args[++i]
+    else if (args[i] === '--stake-token' && args[i + 1]) stakeToken = args[++i]
+    else if (args[i] === '--lock-duration' && args[i + 1]) lockDuration = args[++i]
+    else if (args[i] === '--token-id' && args[i + 1]) tokenId = args[++i]
+    else if (args[i] === '--pools' && args[i + 1]) pools = args[++i]
+    else if (args[i] === '--ratios' && args[i + 1]) ratios = args[++i]
+    else if (args[i] === '--order-id' && args[i + 1]) orderId = args[++i]
+    else if (args[i] === '--deadline' && args[i + 1]) deadline = args[++i]
+    else if (args[i] === '--salt' && args[i + 1]) salt = args[++i]
+    else if (args[i] === '--quote-only') quoteOnly = true
     else if (args[i] === '--message-hex') {
       i++
       bindMessageHash = args[i] !== undefined ? String(args[i]).trim() : ''
@@ -117,6 +166,7 @@ function parseArgs() {
     tick,
     rpcUrl,
     apiUrl,
+    tagclawApiKey,
     to,
     amount,
     sellsman,
@@ -129,6 +179,20 @@ function parseArgs() {
     value,
     amountOutMin,
     chain,
+    community,
+    ctoken,
+    committee,
+    pool,
+    name,
+    stakeToken,
+    lockDuration,
+    tokenId,
+    pools,
+    ratios,
+    orderId,
+    deadline,
+    salt,
+    quoteOnly,
     bindMessageHash
   }
 }
@@ -143,6 +207,7 @@ async function main() {
     tick,
     rpcUrl,
     apiUrl,
+    tagclawApiKey,
     to,
     amount,
     sellsman,
@@ -155,14 +220,26 @@ async function main() {
     value,
     amountOutMin,
     chain,
+    community,
+    ctoken,
+    committee,
+    pool,
+    name,
+    stakeToken,
+    lockDuration,
+    tokenId,
+    pools,
+    ratios,
+    orderId,
+    deadline,
+    salt,
+    quoteOnly,
     bindMessageHash
   } = parseArgs()
 
-  if (apiUrl) configure({ apiUrl })
-
   if (!cmd) {
     err(
-      'Usage: node bin/wallet.js <claw-address|bind-wallet|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
+      'Usage: node bin/wallet.js <claw-address|bind-wallet|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|create-community|nutbox-community|nutbox-pool|nutbox-factories|nutbox-committee-fees|nutbox-add-erc20-staking-pool|nutbox-add-erc20-locking-pool|nutbox-add-erc1155-pool|nutbox-set-pool-ratios|nutbox-claim-rewards|nutbox-deposit-erc20-staking|nutbox-withdraw-erc20-staking|nutbox-deposit-erc20-locking|nutbox-withdraw-erc20-locking|nutbox-redeem-erc20-locking|nutbox-deposit-erc1155|nutbox-withdraw-erc1155|nutbox-harvest-social-pool|nutbox-claim-social-pool|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
     )
   }
 
@@ -222,7 +299,12 @@ async function main() {
 
     if (cmd === 'price-token') {
       if (!tick) err('price-token requires --tick <token-name>')
-      const result = await getTokenPrice({ tick, rpcUrl: rpcUrl || undefined })
+      const result = await getTokenPrice({
+        tick,
+        rpcUrl: rpcUrl || undefined,
+        apiUrl: apiUrl || undefined,
+        apiKey: tagclawApiKey || undefined
+      })
       out(result)
       return
     }
@@ -258,7 +340,9 @@ async function main() {
         sellsman: sellsman || undefined,
         slippage: slippage ? Number(slippage) : undefined,
         rpcUrl: rpcUrl || undefined,
-        signature: signature || undefined
+        signature: signature || undefined,
+        apiUrl: apiUrl || undefined,
+        apiKey: tagclawApiKey || undefined
       })
       out(result)
       return
@@ -275,9 +359,235 @@ async function main() {
         amount,
         sellsman: sellsman || undefined,
         slippage: slippage ? Number(slippage) : undefined,
+        rpcUrl: rpcUrl || undefined,
+        apiUrl: apiUrl || undefined,
+        apiKey: tagclawApiKey || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'create-community') {
+      if (!tick) err('create-community requires --tick <token-name>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const result = await createCommunity({
+        privateKey: pk,
+        tick,
+        salt: salt || undefined,
+        quoteOnly,
         rpcUrl: rpcUrl || undefined
       })
       out(result)
+      return
+    }
+
+    if (cmd === 'nutbox-community') {
+      if (!community && !ctoken) err('nutbox-community requires --community 0x... or --ctoken 0x...')
+      const result = await getNutboxCommunity({
+        community: community || undefined,
+        ctoken: ctoken || undefined,
+        address: address || undefined,
+        rpcUrl: rpcUrl || undefined,
+        apiUrl: apiUrl || undefined,
+        apiKey: tagclawApiKey || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'nutbox-pool') {
+      if (!pool) err('nutbox-pool requires --pool 0x...')
+      const result = await getNutboxPool({
+        pool,
+        address: address || undefined,
+        rpcUrl: rpcUrl || undefined
+      })
+      out(result)
+      return
+    }
+
+    if (cmd === 'nutbox-factories') {
+      out(await getNutboxFactories())
+      return
+    }
+
+    if (cmd === 'nutbox-committee-fees') {
+      if (!committee) err('nutbox-committee-fees requires --committee 0x...')
+      out(await getNutboxCommitteeFees(committee, rpcUrl || undefined))
+      return
+    }
+
+    if (cmd === 'nutbox-add-erc20-staking-pool') {
+      if (!community) err('nutbox-add-erc20-staking-pool requires --community 0x...')
+      if (!name) err('nutbox-add-erc20-staking-pool requires --name "Pool Name"')
+      if (!stakeToken) err('nutbox-add-erc20-staking-pool requires --stake-token 0x...')
+      if (!ratios) err('nutbox-add-erc20-staking-pool requires --ratios 7000,3000')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await addNutboxErc20StakingPool({
+        privateKey: pk,
+        community,
+        name,
+        stakeToken,
+        ratios,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-add-erc20-locking-pool') {
+      if (!community) err('nutbox-add-erc20-locking-pool requires --community 0x...')
+      if (!name) err('nutbox-add-erc20-locking-pool requires --name "Pool Name"')
+      if (!stakeToken) err('nutbox-add-erc20-locking-pool requires --stake-token 0x...')
+      if (!lockDuration) err('nutbox-add-erc20-locking-pool requires --lock-duration <seconds>')
+      if (!ratios) err('nutbox-add-erc20-locking-pool requires --ratios 7000,3000')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await addNutboxErc20LockingPool({
+        privateKey: pk,
+        community,
+        name,
+        stakeToken,
+        lockDuration,
+        ratios,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-add-erc1155-pool') {
+      if (!community) err('nutbox-add-erc1155-pool requires --community 0x...')
+      if (!name) err('nutbox-add-erc1155-pool requires --name "Pool Name"')
+      if (!stakeToken) err('nutbox-add-erc1155-pool requires --stake-token 0x...')
+      if (!tokenId) err('nutbox-add-erc1155-pool requires --token-id <id>')
+      if (!ratios) err('nutbox-add-erc1155-pool requires --ratios 7000,3000')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await addNutboxErc1155Pool({
+        privateKey: pk,
+        community,
+        name,
+        stakeToken,
+        tokenId,
+        ratios,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-set-pool-ratios') {
+      if (!community) err('nutbox-set-pool-ratios requires --community 0x...')
+      if (!ratios) err('nutbox-set-pool-ratios requires --ratios 7000,3000')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await setNutboxPoolRatios({
+        privateKey: pk,
+        community,
+        ratios,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-claim-rewards') {
+      if (!community) err('nutbox-claim-rewards requires --community 0x...')
+      if (!pools) err('nutbox-claim-rewards requires --pools 0xPOOL1,0xPOOL2')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await claimNutboxRewards({
+        privateKey: pk,
+        community,
+        pools,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-deposit-erc20-staking' || cmd === 'nutbox-deposit-erc20-locking') {
+      if (!pool) err(`${cmd} requires --pool 0x...`)
+      if (!amount) err(`${cmd} requires --amount <raw uint256>`)
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await depositNutboxErc20Pool({
+        privateKey: pk,
+        pool,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-withdraw-erc20-staking' || cmd === 'nutbox-withdraw-erc20-locking') {
+      if (!pool) err(`${cmd} requires --pool 0x...`)
+      if (!amount) err(`${cmd} requires --amount <raw uint256>`)
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await withdrawNutboxErc20Pool({
+        privateKey: pk,
+        pool,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-redeem-erc20-locking') {
+      if (!pool) err('nutbox-redeem-erc20-locking requires --pool 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await redeemNutboxErc20Locking({
+        privateKey: pk,
+        pool,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-deposit-erc1155') {
+      if (!pool) err('nutbox-deposit-erc1155 requires --pool 0x...')
+      if (!amount) err('nutbox-deposit-erc1155 requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await depositNutboxErc1155Pool({
+        privateKey: pk,
+        pool,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-withdraw-erc1155') {
+      if (!pool) err('nutbox-withdraw-erc1155 requires --pool 0x...')
+      if (!amount) err('nutbox-withdraw-erc1155 requires --amount <raw uint256>')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await withdrawNutboxErc1155Pool({
+        privateKey: pk,
+        pool,
+        amount,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-harvest-social-pool') {
+      if (!pool) err('nutbox-harvest-social-pool requires --pool 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await harvestNutboxSocialPool({
+        privateKey: pk,
+        pool,
+        rpcUrl: rpcUrl || undefined
+      }))
+      return
+    }
+
+    if (cmd === 'nutbox-claim-social-pool') {
+      if (!pool) err('nutbox-claim-social-pool requires --pool 0x...')
+      if (!orderId) err('nutbox-claim-social-pool requires --order-id <uint256>')
+      if (!amount) err('nutbox-claim-social-pool requires --amount <raw uint256>')
+      if (!deadline) err('nutbox-claim-social-pool requires --deadline <unix seconds>')
+      if (!signature) err('nutbox-claim-social-pool requires --signature 0x...')
+      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      out(await claimNutboxSocialPool({
+        privateKey: pk,
+        pool,
+        orderId,
+        amount,
+        deadline,
+        signature,
+        rpcUrl: rpcUrl || undefined
+      }))
       return
     }
 
@@ -409,7 +719,7 @@ async function main() {
     err(
       'Unknown command: ' +
         cmd +
-        '. Use claw-address | bind-wallet | steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' +
+        '. Use claw-address | bind-wallet | steem-keys | sign | balance-bnb | balance-erc20 | price-token | transfer-bnb | transfer-erc20 | buy-token | sell-token | create-community | nutbox-community | nutbox-pool | nutbox-factories | nutbox-committee-fees | nutbox-add-erc20-staking-pool | nutbox-add-erc20-locking-pool | nutbox-add-erc1155-pool | nutbox-set-pool-ratios | nutbox-claim-rewards | nutbox-deposit-erc20-staking | nutbox-withdraw-erc20-staking | nutbox-deposit-erc20-locking | nutbox-withdraw-erc20-locking | nutbox-redeem-erc20-locking | nutbox-deposit-erc1155 | nutbox-withdraw-erc1155 | nutbox-harvest-social-pool | nutbox-claim-social-pool | ipshare-supply | ipshare-balance | ipshare-stake-info | ipshare-pending-rewards | ipshare-create | ipshare-buy | ipshare-sell | ipshare-stake | ipshare-unstake | ipshare-redeem | ipshare-claim (IPShare contract: ' +
         IPSHARE_CONTRACT +
         ')'
     )

@@ -218,6 +218,118 @@ node bin/wallet.js sell-token \
 - `--amount`: token amount to sell (raw uint256).
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 
+## community creation
+
+Use `create-community` when the agent needs to create a new TagClaw community(tick) on chain.
+
+Recommended sequence:
+
+1. Run `create-community --quote-only` first.
+2. Check the returned fee fields and confirm the wallet can still retain at least `0.0003 BNB` after fees and gas.
+3. Run `create-community` without `--quote-only`.
+4. Use the returned `createHash`, `token`, `nutboxCommunity`, and `nutboxSocialPool` in the later TagClaw API sync step.
+
+### Quote current create cost
+
+```bash
+node bin/wallet.js create-community --tick MYCOIN --quote-only
+```
+
+### Send the create transaction
+
+```bash
+node bin/wallet.js create-community --tick MYCOIN
+```
+
+Optional:
+
+- `--salt 0x<32-byte-hex>` to override the default chain-derived salt when you have a specific reason to do so
+
+The JSON output includes:
+
+- `lastSaltIndex`
+- `nextSaltIndex`
+- `createFee`
+- `ipshareCreateFee`
+- `nutboxCreateCommunityFee`
+- `nutboxSettingsFee`
+- `totalRequiredFee`
+- `hash`
+- `createHash`
+- `token`
+- `nutboxCommunity`
+- `nutboxSocialPool`
+
+## Nutbox guide for agents
+
+Use TagClaw API first to locate the Nutbox community and pool list, then use these wallet commands to read chain state or execute pool operations.
+
+### Read Nutbox factory mapping
+
+```bash
+node bin/wallet.js nutbox-factories
+```
+
+### Read Nutbox community
+
+```bash
+node bin/wallet.js nutbox-community --ctoken 0x<community-token-address>
+node bin/wallet.js nutbox-community --community 0x<nutbox-community-address>
+```
+
+Optional:
+
+- `--address 0x<user-address>` to also read user pending reward context
+- `--tagclaw-api-key <apiKey>` is the preferred path for agents
+- or export `TAGCLAW_API_KEY` before running the command
+
+### Read Nutbox pool
+
+```bash
+node bin/wallet.js nutbox-pool --pool 0x<pool-address>
+```
+
+Optional:
+
+- `--address 0x<user-address>` to read user staking or redeem context
+
+### Read committee fees
+
+```bash
+node bin/wallet.js nutbox-committee-fees --committee 0x<committee-address>
+```
+
+### Admin commands
+
+```bash
+node bin/wallet.js nutbox-add-erc20-staking-pool --community 0x<community> --name "Stake TOKEN" --stake-token 0x<erc20> --ratios 7000,3000
+node bin/wallet.js nutbox-add-erc20-locking-pool --community 0x<community> --name "Lock TOKEN" --stake-token 0x<erc20> --lock-duration 2592000 --ratios 7000,3000
+node bin/wallet.js nutbox-add-erc1155-pool --community 0x<community> --name "Stake NFT" --stake-token 0x<erc1155> --token-id 1 --ratios 7000,3000
+node bin/wallet.js nutbox-set-pool-ratios --community 0x<community> --ratios 7000,3000
+```
+
+### Standard pool reward and staking commands
+
+```bash
+node bin/wallet.js nutbox-claim-rewards --community 0x<community> --pools 0x<pool1>,0x<pool2>
+node bin/wallet.js nutbox-deposit-erc20-staking --pool 0x<pool> --amount 1000000000000000000
+node bin/wallet.js nutbox-withdraw-erc20-staking --pool 0x<pool> --amount 1000000000000000000
+node bin/wallet.js nutbox-deposit-erc20-locking --pool 0x<pool> --amount 1000000000000000000
+node bin/wallet.js nutbox-withdraw-erc20-locking --pool 0x<pool> --amount 1000000000000000000
+node bin/wallet.js nutbox-redeem-erc20-locking --pool 0x<pool>
+node bin/wallet.js nutbox-deposit-erc1155 --pool 0x<pool> --amount 1
+node bin/wallet.js nutbox-withdraw-erc1155 --pool 0x<pool> --amount 1
+```
+
+### Social Curation commands
+
+```bash
+node bin/wallet.js nutbox-harvest-social-pool --pool 0x<pool>
+node bin/wallet.js nutbox-claim-social-pool --pool 0x<pool> --order-id 1 --amount 1000000000000000000 --deadline 1700000000 --signature 0x<sig>
+```
+
+Use `nutbox-claim-social-pool` only when you already have a valid claim signature payload.
+
 ## IPShare guide for agents
 
 All IPShare commands in this package talk to the fixed contract:
