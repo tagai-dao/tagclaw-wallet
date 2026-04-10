@@ -1,0 +1,93 @@
+/**
+ * 全局常量：合约地址、链配置、数学常量
+ */
+const { ethers } = require('ethers')
+
+// Default BNB Chain (BSC) RPC, override via TAGCLAW_BNB_RPC
+const DEFAULT_BNB_RPC = process.env.TAGCLAW_BNB_RPC || 'https://bsc-dataseed2.binance.org'
+
+const STEEM_USERNAME = 'tagai'
+
+/**
+ * 与产品约定一致：必须用 JSON.stringify(..., null, 4)，禁止手抄整段字符串
+ * （Steem brain 派生依赖 Claw personal_sign）
+ */
+const RegisterSteemMessage = JSON.stringify(
+  {
+    project: 'tagai',
+    method: 'generate-social-account'
+  },
+  null,
+  4
+)
+
+// --- Pump / Swap 合约地址（与 tiptag-ui 对齐）---
+
+const WETH = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
+const UNISWAP_V2_FACTORY = '0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73'
+const UNISWAP_V2_ROUTER = '0x10ED43C718714eb63d5aA57B78B54704E256024E'
+const PCS_CL_POOL_MANAGER = '0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b'
+const WRAP_SWAPER = '0x4cA57c64DFe1cF1be977093C75f9d9cdd1DD2E10'
+const WRAP_SWAPER2 = '0x72D353c0469C10F6B769F13b67EEdB2E1F26FB01'
+
+// --- IPShare 合约 ---
+
+const IPSHARE1 = '0x7B0ddC305C32AAEbabc0FE372a4460e9903e95D0'
+const IPSHARE2 = '0x24328DccA1bA54EeE82e2993F021802e64290486'
+const IPSHARE_CONTRACT = '0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922'
+const IPSHARE_DECIMALS = 18
+
+// --- Pump 版本 → 合约地址映射 ---
+
+const PUMP_CONTRACTS = {
+  1: '0xa77253Ac630502A35A6FcD210A01f613D33ba7cD',
+  2: '0x3DC52C69C3C8be568372E16d50E9F3FEc796610c',
+  3: '0xc9FaA3c05a5178C380d9C28Edffa38d90D606F22',
+  4: '0x0476571a77Cc8Fc28796935Cf173c265F2021448',
+  5: '0x2cAbfDE43f93422fFb070f0Fa03d2951dbBC7749',
+  6: '0x201308B193bC0Aa81Ac540A7D3B3ADb530a39861',
+  7: '0x3E75E2db40E7cc9C7d7869Fc2d97eDAb01724212',
+  8: '0x88d495228E831b01D8Ae6d62f9633cBcC6d27De2'
+}
+
+// --- Nutbox 工厂合约 ---
+
+const NUTBOX_FACTORIES = {
+  erc20Staking: '0xDc3f940ac6Da516d5C9cc59c8AFE0F85A576E2A4',
+  erc20Locking: '0x8189a03Cfa3d8919a2eb8f08E4f88c21Cf78cA01',
+  erc1155Staking: '0x398eA6Db014595F23d0C9Cb1390a10472cdD43BA',
+  socialCuration: '0xc4674D3fBbD201Ea401a8B7e7285F956178593D8'
+}
+
+// --- 数学 / 通用常量 ---
+
+const MIN_CREATE_BNB_REMAINING = ethers.parseEther('0.001')
+const ZERO_ADDRESS = ethers.ZeroAddress
+const MAX_UINT256 = ethers.MaxUint256
+const DEFAULT_DEADLINE_SECONDS = 300n
+const TOKEN_PRICE_UNIT = 10n ** 18n
+const Q192 = 2n ** 192n
+
+module.exports = {
+  DEFAULT_BNB_RPC,
+  STEEM_USERNAME,
+  RegisterSteemMessage,
+  WETH,
+  UNISWAP_V2_FACTORY,
+  UNISWAP_V2_ROUTER,
+  PCS_CL_POOL_MANAGER,
+  WRAP_SWAPER,
+  WRAP_SWAPER2,
+  IPSHARE1,
+  IPSHARE2,
+  IPSHARE_CONTRACT,
+  IPSHARE_DECIMALS,
+  PUMP_CONTRACTS,
+  NUTBOX_FACTORIES,
+  MIN_CREATE_BNB_REMAINING,
+  ZERO_ADDRESS,
+  MAX_UINT256,
+  DEFAULT_DEADLINE_SECONDS,
+  TOKEN_PRICE_UNIT,
+  Q192
+}
