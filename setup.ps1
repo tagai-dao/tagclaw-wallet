@@ -6,7 +6,8 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $Root
 
-$BaseUrl = 'https://raw.githubusercontent.com/ClawWallet/Claw-Wallet-Skill/main'
+# Official skill distribution (same host as SKILL.md / install.ps1 in docs)
+$BaseUrl = if ($env:CLAW_WALLET_SKILLS_BASE_URL) { $env:CLAW_WALLET_SKILLS_BASE_URL } else { 'https://www.clawwallet.cc/skills' }
 # Windows-only Claw files (install.ps1 + launchers; no install.sh / claw-wallet.sh)
 $ClawFiles = @(
   'install.ps1',
