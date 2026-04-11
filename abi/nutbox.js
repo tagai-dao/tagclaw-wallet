@@ -72,7 +72,7 @@ const ERC1155_APPROVAL_ABI = [
   'function setApprovalForAll(address operator, bool approved)'
 ]
 
-module.exports = {
+export {
   NUTBOX_COMMUNITY_ABI,
   NUTBOX_POOL_ABI,
   ERC20_STAKING_POOL_ABI,

@@ -1,8 +1,8 @@
 /**
  * Nutbox 社区 / 矿池全套操作：创建社区、添加矿池、质押、提取、领奖
  */
-const { ethers } = require('ethers')
-const {
+import { ethers } from 'ethers'
+import {
   NUTBOX_COMMUNITY_ABI,
   NUTBOX_POOL_ABI,
   ERC20_STAKING_POOL_ABI,
@@ -13,17 +13,17 @@ const {
   PUMP_CREATE_ABI,
   IPSHARE_ABI,
   TOKEN_NUTBOX_ABI
-} = require('./abi')
-const {
+} from './abi/index.js'
+import {
   DEFAULT_BNB_RPC,
   PUMP_CONTRACTS,
   NUTBOX_FACTORIES,
   MIN_CREATE_BNB_REMAINING,
   ZERO_ADDRESS
-} = require('./constants')
-const { resolveRequestConfig, requestJson } = require('./config')
-const { resolveWriteSigner } = require('./claw')
-const {
+} from './constants.js'
+import { resolveRequestConfig, requestJson } from './config.js'
+import { resolveWriteSigner } from './claw.js'
+import {
   normalizeAddress,
   normalizeRequiredBigInt,
   throwWalletError,
@@ -36,7 +36,7 @@ const {
   serializeBigIntMap,
   ensureAllowance,
   ensureErc1155Approval
-} = require('./helpers')
+} from './helpers.js'
 
 // ─── 内部辅助 ─────────────────────────────────────────
 
@@ -806,7 +806,7 @@ async function claimNutboxSocialPool(params) {
   }
 }
 
-module.exports = {
+export {
   createCommunity,
   getNutboxCommunity,
   getNutboxPool,

@@ -1,18 +1,18 @@
 /**
  * IPShare 全套操作：查询、创建、买卖、质押、赎回、领奖
  */
-const { ethers } = require('ethers')
-const { IPSHARE_ABI } = require('./abi')
-const { DEFAULT_BNB_RPC, IPSHARE_CONTRACT, IPSHARE_DECIMALS } = require('./constants')
-const { resolveWriteSigner } = require('./claw')
-const {
+import { ethers } from 'ethers'
+import { IPSHARE_ABI } from './abi/index.js'
+import { DEFAULT_BNB_RPC, IPSHARE_CONTRACT, IPSHARE_DECIMALS } from './constants.js'
+import { resolveWriteSigner } from './claw.js'
+import {
   normalizeAddress,
   normalizeRequiredBigInt,
   normalizeOptionalBigInt,
   throwWalletError,
   getReadableError,
   ensureNativeBalance
-} = require('./helpers')
+} from './helpers.js'
 
 // ─── 内部辅助 ─────────────────────────────────────────
 
@@ -471,7 +471,7 @@ async function claimIpShareRewards(params) {
   }
 }
 
-module.exports = {
+export {
   getIpShareSupply,
   getIpShareBalance,
   getIpShareStakeInfo,

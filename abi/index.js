@@ -1,16 +1,16 @@
 /**
  * Unified ABI export entrypoint
  */
-const { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI, TOKEN_ALLOWANCE_ABI } = require('./erc20')
-const {
+import { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI, TOKEN_ALLOWANCE_ABI } from './erc20.js'
+import {
   UNISWAP_ROUTER_ABI,
   FACTORY_ABI,
   PAIR_ABI,
   CL_POOL_MANAGER_ABI
-} = require('./router')
-const { WRAP_SWAPER_ABI, WRAP_SWAPER2_ABI } = require('./wrapSwaper')
-const { IPSHARE_ABI } = require('./ipshare')
-const {
+} from './router.js'
+import { WRAP_SWAPER_ABI, WRAP_SWAPER2_ABI } from './wrapSwaper.js'
+import { IPSHARE_ABI } from './ipshare.js'
+import {
   TOKEN_BUY_ABI,
   TOKEN1_BUY_ABI,
   TOKEN5_BUY_ABI,
@@ -21,8 +21,8 @@ const {
   TOKEN_NUTBOX_ABI,
   PUMP_CREATE_ABI,
   PUMP_QUOTE_ABI
-} = require('./tokenPump')
-const {
+} from './tokenPump.js'
+import {
   NUTBOX_COMMUNITY_ABI,
   NUTBOX_POOL_ABI,
   ERC20_STAKING_POOL_ABI,
@@ -31,9 +31,9 @@ const {
   SOCIAL_CURATION_POOL_ABI,
   NUTBOX_COMMITTEE_ABI,
   ERC1155_APPROVAL_ABI
-} = require('./nutbox')
+} from './nutbox.js'
 
-module.exports = {
+export {
   ERC20_BALANCE_ABI,
   ERC20_TRANSFER_ABI,
   TOKEN_ALLOWANCE_ABI,

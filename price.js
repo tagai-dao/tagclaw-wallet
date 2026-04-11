@@ -1,16 +1,16 @@
 /**
  * 代币价格查询：bonding curve、DEX pair、CL pool、BNB/USD
  */
-const { ethers } = require('ethers')
-const {
+import { ethers } from 'ethers'
+import {
   UNISWAP_ROUTER_ABI,
   FACTORY_ABI,
   PAIR_ABI,
   CL_POOL_MANAGER_ABI,
   TOKEN_SUPPLY_ABI,
   PUMP_QUOTE_ABI
-} = require('./abi')
-const {
+} from './abi/index.js'
+import {
   DEFAULT_BNB_RPC,
   WETH,
   UNISWAP_V2_FACTORY,
@@ -20,26 +20,45 @@ const {
   ZERO_ADDRESS,
   TOKEN_PRICE_UNIT,
   Q192
-} = require('./constants')
-const { _config, resolveRequestConfig, fetchTokenInfo } = require('./config')
-const {
+} from './constants.js'
+import { _config, resolveRequestConfig, fetchTokenInfo } from './config.js'
+import {
   throwWalletError,
   getReadableError,
   isBytes32Hex,
   toTokenUnitNumber,
   parseNumericApiValue
-} = require('./helpers')
+} from './helpers.js'
+
+/**
+ * ESM 下无法改写 ethers 命名空间上的构造函数；单测通过下面两个方法注入 fake。
+ * 生产代码始终使用默认的 ethers.Contract / ethers.JsonRpcProvider。
+ */
+let ContractCtor = ethers.Contract
+let JsonRpcProviderCtor = ethers.JsonRpcProvider
+
+/** @internal 仅测试 */
+export function __resetPriceEthersTestDoubles() {
+  ContractCtor = ethers.Contract
+  JsonRpcProviderCtor = ethers.JsonRpcProvider
+}
+
+/** @internal 仅测试 */
+export function __setPriceEthersTestDoubles({ Contract, JsonRpcProvider } = {}) {
+  if (Contract) ContractCtor = Contract
+  if (JsonRpcProvider) JsonRpcProviderCtor = JsonRpcProvider
+}
 
 // ─── DEX 报价 ─────────────────────────────────────────
 
 async function getBuyAmountUseEth(token, ethAmount, provider) {
-  const router = new ethers.Contract(UNISWAP_V2_ROUTER, UNISWAP_ROUTER_ABI, provider)
+  const router = new ContractCtor(UNISWAP_V2_ROUTER, UNISWAP_ROUTER_ABI, provider)
   const amounts = await router.getAmountsOut(ethAmount, [WETH, token])
   return amounts[amounts.length - 1]
 }
 
 async function getSellAmountUseToken(token, tokenAmount, provider) {
-  const router = new ethers.Contract(UNISWAP_V2_ROUTER, UNISWAP_ROUTER_ABI, provider)
+  const router = new ContractCtor(UNISWAP_V2_ROUTER, UNISWAP_ROUTER_ABI, provider)
   const amounts = await router.getAmountsOut(tokenAmount, [token, WETH])
   return amounts[amounts.length - 1] * 9800n / 10000n
 }
@@ -51,8 +70,8 @@ async function getUnlistedBuyAmount(token, version, ethAmount, provider) {
   if (!pumpAddress) {
     throwWalletError('INVALID_VERSION', `unsupported version=${version}`)
   }
-  const tokenContract = new ethers.Contract(token, TOKEN_SUPPLY_ABI, provider)
-  const pumpContract = new ethers.Contract(pumpAddress, PUMP_QUOTE_ABI, provider)
+  const tokenContract = new ContractCtor(token, TOKEN_SUPPLY_ABI, provider)
+  const pumpContract = new ContractCtor(pumpAddress, PUMP_QUOTE_ABI, provider)
   const supply = await tokenContract.bondingCurveSupply()
   const afterFee = ethAmount * 9800n / 10000n
   return pumpContract.getBuyAmountByValue(supply, afterFee)
@@ -63,8 +82,8 @@ async function getUnlistedSellAmount(token, version, tokenAmount, provider) {
   if (!pumpAddress) {
     throwWalletError('INVALID_VERSION', `unsupported version=${version}`)
   }
-  const tokenContract = new ethers.Contract(token, TOKEN_SUPPLY_ABI, provider)
-  const pumpContract = new ethers.Contract(pumpAddress, PUMP_QUOTE_ABI, provider)
+  const tokenContract = new ContractCtor(token, TOKEN_SUPPLY_ABI, provider)
+  const pumpContract = new ContractCtor(pumpAddress, PUMP_QUOTE_ABI, provider)
   const supply = await tokenContract.bondingCurveSupply()
   return pumpContract.getSellPriceAfterFee(supply, tokenAmount)
 }
@@ -103,7 +122,7 @@ async function getBnbPriceUsd(apiUrl = _config.apiUrl) {
 }
 
 async function getPairPriceInBnb(token, pair, provider) {
-  const pairContract = new ethers.Contract(pair, PAIR_ABI, provider)
+  const pairContract = new ContractCtor(pair, PAIR_ABI, provider)
   const [reserves, token0] = await Promise.all([
     pairContract.getReserves(),
     pairContract.token0()
@@ -126,7 +145,7 @@ async function resolvePairAddress(token, pair, provider) {
     return pair
   }
 
-  const factory = new ethers.Contract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider)
+  const factory = new ContractCtor(UNISWAP_V2_FACTORY, FACTORY_ABI, provider)
   const resolvedPair = await factory.getPair(token, WETH)
   if (!resolvedPair || resolvedPair === ZERO_ADDRESS) {
     throwWalletError('TOKEN_PRICE_QUOTE_FAILED', `no pair found for token=${token}`)
@@ -136,7 +155,7 @@ async function resolvePairAddress(token, pair, provider) {
 }
 
 async function getV7PoolPriceInBnb(poolId, provider) {
-  const manager = new ethers.Contract(PCS_CL_POOL_MANAGER, CL_POOL_MANAGER_ABI, provider)
+  const manager = new ContractCtor(PCS_CL_POOL_MANAGER, CL_POOL_MANAGER_ABI, provider)
   const [sqrtPriceX96] = await manager.getSlot0(poolId)
   if (sqrtPriceX96 === 0n) {
     throwWalletError('TOKEN_PRICE_QUOTE_FAILED', `pool=${poolId} returned zero price`)
@@ -157,8 +176,8 @@ async function getBondingCurvePriceInBnb(token, version, provider) {
     throwWalletError('INVALID_VERSION', `unsupported version=${version}`)
   }
 
-  const tokenContract = new ethers.Contract(token, TOKEN_SUPPLY_ABI, provider)
-  const pumpContract = new ethers.Contract(pumpAddress, PUMP_QUOTE_ABI, provider)
+  const tokenContract = new ContractCtor(token, TOKEN_SUPPLY_ABI, provider)
+  const pumpContract = new ContractCtor(pumpAddress, PUMP_QUOTE_ABI, provider)
   const supply = await tokenContract.bondingCurveSupply()
   const rawPrice = await pumpContract.getPrice(supply, TOKEN_PRICE_UNIT)
   const price = toTokenUnitNumber(rawPrice)
@@ -179,7 +198,7 @@ async function getTokenPriceInBnb(tokenInfo, rpcUrl = DEFAULT_BNB_RPC) {
     throwWalletError('INVALID_TOKEN_INFO', `invalid version=${version}`)
   }
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const provider = new JsonRpcProviderCtor(rpcUrl)
 
   try {
     if (!listed) {
@@ -265,7 +284,7 @@ async function getTokenPrice(params) {
   }
 }
 
-module.exports = {
+export {
   getBuyAmountUseEth,
   getSellAmountUseToken,
   getUnlistedBuyAmount,

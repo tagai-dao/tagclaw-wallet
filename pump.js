@@ -2,8 +2,8 @@
  * Token Pump 交易：buyToken / sellToken
  * 与 tiptag-ui src/utils/pump.ts 逻辑对齐
  */
-const { ethers } = require('ethers')
-const {
+import { ethers } from 'ethers'
+import {
   WRAP_SWAPER_ABI,
   WRAP_SWAPER2_ABI,
   TOKEN_BUY_ABI,
@@ -12,8 +12,8 @@ const {
   TOKEN8_BUY_ABI,
   TOKEN_SELL_ABI,
   TOKEN8_SELL_ABI
-} = require('./abi')
-const {
+} from './abi/index.js'
+import {
   DEFAULT_BNB_RPC,
   WETH,
   UNISWAP_V2_ROUTER,
@@ -23,16 +23,16 @@ const {
   IPSHARE2,
   ZERO_ADDRESS,
   DEFAULT_DEADLINE_SECONDS
-} = require('./constants')
-const { fetchTokenInfo, requestJson } = require('./config')
-const { resolveWriteSigner } = require('./claw')
-const {
+} from './constants.js'
+import { fetchTokenInfo, requestJson } from './config.js'
+import { resolveWriteSigner } from './claw.js'
+import {
   getBuyAmountUseEth,
   getSellAmountUseToken,
   getUnlistedBuyAmount,
   getUnlistedSellAmount
-} = require('./price')
-const {
+} from './price.js'
+import {
   normalizeSellsman,
   normalizeSlippage,
   calcMinBySlippage,
@@ -41,7 +41,7 @@ const {
   ensureNativeBalance,
   ensureTokenBalance,
   ensureAllowance
-} = require('./helpers')
+} from './helpers.js'
 
 // ─── 内部辅助 ─────────────────────────────────────────
 
@@ -326,7 +326,7 @@ async function sellToken(params) {
   }
 }
 
-module.exports = {
+export {
   buyToken,
   sellToken
 }

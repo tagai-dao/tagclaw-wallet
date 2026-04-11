@@ -50,7 +50,7 @@ const PUMP_QUOTE_ABI = [
   'function getSellPriceAfterFee(uint256 supply, uint256 amount) view returns (uint256)'
 ]
 
-module.exports = {
+export {
   TOKEN_BUY_ABI,
   TOKEN1_BUY_ABI,
   TOKEN5_BUY_ABI,

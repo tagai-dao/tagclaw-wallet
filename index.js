@@ -2,25 +2,25 @@
  * tagclaw-wallet — unified export entrypoint
  * 所有业务逻辑按功能拆分到独立模块，此处仅做聚合 re-export
  */
-const { configure, mergeTagclawWalletEnv } = require('./config')
-const { generateSteemKeys } = require('./steem')
-const {
+import { configure, mergeTagclawWalletEnv } from './config.js'
+import { generateSteemKeys } from './steem.js'
+import {
   resolveWriteSigner,
   signMessage,
   generateSteemKeysFromClaw,
   getClawWalletAddress,
   bindClawWallet,
   syncTagclawWalletEnv
-} = require('./claw')
-const {
+} from './claw.js'
+import {
   getBnbBalance,
   getErc20Balance,
   transferBnb,
   transferErc20
-} = require('./balance')
-const { getTokenPrice } = require('./price')
-const { buyToken, sellToken } = require('./pump')
-const {
+} from './balance.js'
+import { getTokenPrice } from './price.js'
+import { buyToken, sellToken } from './pump.js'
+import {
   createCommunity,
   getNutboxCommunity,
   getNutboxPool,
@@ -38,8 +38,8 @@ const {
   withdrawNutboxErc1155Pool,
   harvestNutboxSocialPool,
   claimNutboxSocialPool
-} = require('./nutbox')
-const {
+} from './nutbox.js'
+import {
   getIpShareSupply,
   getIpShareBalance,
   getIpShareStakeInfo,
@@ -52,11 +52,10 @@ const {
   redeemIpShare,
   claimIpShareRewards,
   IPSHARE_CONTRACT
-} = require('./ipshare')
-const { DEFAULT_BNB_RPC } = require('./constants')
-const { RegisterSteemMessage } = require('./constants')
+} from './ipshare.js'
+import { DEFAULT_BNB_RPC, RegisterSteemMessage } from './constants.js'
 
-module.exports = {
+export {
   configure,
   RegisterSteemMessage,
   generateSteemKeys,

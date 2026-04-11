@@ -17,3 +17,9 @@ claw-wallet
 claw-wallet.cmd
 claw-wallet.sh
 claw-wallet.ps1
+asset_cache.json
+asset_cursors.json
+sandbox_err.log 
+SKILL.md
+wrapped_sek.json
+upgrade_script/*

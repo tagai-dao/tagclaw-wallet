@@ -1,10 +1,10 @@
 /**
  * BNB / ERC20 余额查询与转账
  */
-const { ethers } = require('ethers')
-const { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI } = require('./abi')
-const { DEFAULT_BNB_RPC } = require('./constants')
-const { resolveWriteSigner } = require('./claw')
+import { ethers } from 'ethers'
+import { ERC20_BALANCE_ABI, ERC20_TRANSFER_ABI } from './abi/index.js'
+import { DEFAULT_BNB_RPC } from './constants.js'
+import { resolveWriteSigner } from './claw.js'
 
 /**
  * Query native BNB balance for an address (BNB Chain / BSC)
@@ -99,7 +99,7 @@ async function transferErc20(privateKey, tokenContractAddress, toAddress, amount
   }
 }
 
-module.exports = {
+export {
   getBnbBalance,
   getErc20Balance,
   transferBnb,

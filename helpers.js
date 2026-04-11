@@ -2,13 +2,13 @@
  * 通用校验、格式化、guard 工具函数
  * 不含业务逻辑，仅被其他模块按需引用
  */
-const { ethers } = require('ethers')
-const {
+import { ethers } from 'ethers'
+import {
   ERC20_BALANCE_ABI,
   TOKEN_ALLOWANCE_ABI,
   ERC1155_APPROVAL_ABI
-} = require('./abi')
-const { ZERO_ADDRESS, MAX_UINT256, NUTBOX_FACTORIES } = require('./constants')
+} from './abi/index.js'
+import { ZERO_ADDRESS, MAX_UINT256, NUTBOX_FACTORIES } from './constants.js'
 
 // ─── 输入校验 ────────────────────────────────────────
 
@@ -194,7 +194,7 @@ async function ensureErc1155Approval(token, owner, operator, signer) {
   return { approved: true, hash: receipt.hash }
 }
 
-module.exports = {
+export {
   normalizeSellsman,
   normalizeSlippage,
   normalizeAddress,

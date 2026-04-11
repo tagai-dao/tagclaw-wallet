@@ -18,6 +18,6 @@ const IPSHARE_ABI = [
   'function claim(address subject)'
 ]
 
-module.exports = {
+export {
   IPSHARE_ABI
 }

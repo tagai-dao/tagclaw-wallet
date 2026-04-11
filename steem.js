@@ -2,9 +2,13 @@
  * Steem 密钥派生：base58 编码、brain key 生成、角色密钥派生
  * 纯函数模块，无副作用
  */
-const crypto = require('crypto')
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
+import { STEEM_USERNAME } from './constants.js'
+
+/** @steemit/steem-js 仍为 CJS，用 createRequire 加载 */
+const require = createRequire(import.meta.url)
 const steemAuth = require('@steemit/steem-js/lib/auth')
-const { STEEM_USERNAME } = require('./constants')
 
 // Base58 alphabet (Steem/Bitcoin compatible), implemented inline without third-party deps
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
@@ -25,7 +29,7 @@ function base58Encode(buffer) {
 }
 
 function sha256Hex(str) {
-  return crypto.createHash('sha256').update(str, 'utf8').digest('hex')
+  return createHash('sha256').update(str, 'utf8').digest('hex')
 }
 
 /** 32 字节 hex（64 字符，可带或不带 0x） */
@@ -78,7 +82,7 @@ function generateSteemKeys(evmPrivateKey) {
   return steemKeysFromBrainPass(pass)
 }
 
-module.exports = {
+export {
   brainKeyFromSecretHex,
   steemKeysFromBrainPass,
   generateSteemKeys

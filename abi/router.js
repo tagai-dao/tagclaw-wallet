@@ -18,7 +18,7 @@ const CL_POOL_MANAGER_ABI = [
   'function getSlot0(bytes32 id) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)'
 ]
 
-module.exports = {
+export {
   UNISWAP_ROUTER_ABI,
   FACTORY_ABI,
   PAIR_ABI,

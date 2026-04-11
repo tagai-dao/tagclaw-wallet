@@ -1,15 +1,15 @@
 /**
  * Claw 沙箱钱包集成：signer 管理、地址查询、绑定、签名、Steem 派生
  */
-const crypto = require('crypto')
-const fs = require('fs')
-const path = require('path')
-const { ethers } = require('ethers')
-const { ClawEthersSigner } = require('@claw_wallet_sdk/claw_wallet/ethers')
-const { ClawSandboxClient } = require('@claw_wallet_sdk/claw_wallet')
-const { DEFAULT_BNB_RPC, RegisterSteemMessage } = require('./constants')
-const { WALLET_ROOT, mergeTagclawWalletEnv } = require('./config')
-const { brainKeyFromSecretHex, steemKeysFromBrainPass } = require('./steem')
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { ethers } from 'ethers'
+import { ClawEthersSigner } from '@claw_wallet_sdk/claw_wallet/ethers'
+import { ClawSandboxClient } from '@claw_wallet_sdk/claw_wallet'
+import { DEFAULT_BNB_RPC, RegisterSteemMessage } from './constants.js'
+import { WALLET_ROOT, mergeTagclawWalletEnv } from './config.js'
+import { brainKeyFromSecretHex, steemKeysFromBrainPass } from './steem.js'
 
 // ─── Claw 配置加载 ───────────────────────────────────
 
@@ -30,7 +30,7 @@ function loadClawConfig() {
 }
 
 function assertClawConfig(cfg) {
-  if (!cfg.sandboxUrl || !cfg.sandboxToken || !cfg.uid) {
+  if (!cfg.sandboxUrl || !cfg.uid) {
     throw new Error(
       'Claw wallet: set CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid). See README Installation: download Claw-Wallet-Skill scripts into this folder, run bash install.sh, then check .env.clay.'
     )
@@ -55,7 +55,7 @@ function kdfFromSignatureHex(signatureHex) {
   const v = ((Number(sig.v) % 256) + 256) % 256
   const vBuf = Buffer.from([v])
   const packed = Buffer.concat([r, s, vBuf])
-  return crypto.createHash('sha256').update(packed).digest('hex')
+  return createHash('sha256').update(packed).digest('hex')
 }
 
 // ─── 沙箱钱包就绪检测 ────────────────────────────────
@@ -184,7 +184,7 @@ async function syncTagclawWalletEnv(opts = {}) {
   return { address, steemKeys, envPath }
 }
 
-module.exports = {
+export {
   resolveWriteSigner,
   signMessage,
   generateSteemKeysFromClaw,

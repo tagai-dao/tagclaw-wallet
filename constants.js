@@ -1,7 +1,7 @@
 /**
  * 全局常量：合约地址、链配置、数学常量
  */
-const { ethers } = require('ethers')
+import { ethers } from 'ethers'
 
 // Default BNB Chain (BSC) RPC, override via TAGCLAW_BNB_RPC
 const DEFAULT_BNB_RPC = process.env.TAGCLAW_BNB_RPC || 'https://bsc-dataseed2.binance.org'
@@ -68,7 +68,7 @@ const DEFAULT_DEADLINE_SECONDS = 300n
 const TOKEN_PRICE_UNIT = 10n ** 18n
 const Q192 = 2n ** 192n
 
-module.exports = {
+export {
   DEFAULT_BNB_RPC,
   STEEM_USERNAME,
   RegisterSteemMessage,

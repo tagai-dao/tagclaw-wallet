@@ -1,9 +1,12 @@
 /**
  * 模块级配置、环境变量管理、通用 API 请求工具
  */
-const fs = require('fs')
-const path = require('path')
-const dotenv = require('dotenv')
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import dotenv from 'dotenv'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const EXTERNAL_TAGCLAW_API_KEY = process.env.TAGCLAW_API_KEY || ''
 
@@ -155,7 +158,7 @@ function mergeTagclawWalletEnv(data) {
   return envPath
 }
 
-module.exports = {
+export {
   _config,
   WALLET_ROOT,
   configure,

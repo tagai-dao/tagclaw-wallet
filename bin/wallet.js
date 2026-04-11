@@ -25,7 +25,7 @@
  *
  * On success, outputs exactly one JSON line to stdout; errors go to stderr and exit with code 1.
  */
-const {
+import {
   generateSteemKeys,
   generateSteemKeysFromClaw,
   signMessage,
@@ -68,7 +68,7 @@ const {
   redeemIpShare,
   claimIpShareRewards,
   IPSHARE_CONTRACT
-} = require('../index.js')
+} from '../index.js'
 
 function out(json) {
   console.log(JSON.stringify(json))
