@@ -2,11 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ethers } from 'ethers'
 
-import * as wallet from '../index.js'
+import * as wallet from '../src/index.js'
 import {
   __setPriceEthersTestDoubles,
   __resetPriceEthersTestDoubles
-} from '../price.js'
+} from '../src/price.js'
 
 const originalFetch = global.fetch
 

@@ -198,11 +198,22 @@ node bin/wallet.js buy-token \
   --eth-amount 1000000000000000
 ```
 
+For **version 8** tokens, include the API key (required):
+
+```bash
+node bin/wallet.js buy-token \
+  --private-key 0x<your-EVM-private-key> \
+  --tick MyToken \
+  --eth-amount 1000000000000000 \
+  --tagclaw-api-key <your-api-key>
+```
+
 - `--private-key`: sender EVM private key (`0x...`).
 - `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
 - `--eth-amount`: input ETH/BNB amount in wei.
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 - `--signature`: required only when `version=5` and unlisted.
+- **`--tagclaw-api-key <apiKey>`** (or export **`TAGCLAW_API_KEY`**): **required** when trading **version 8** tokens. Unlisted v8 buys call the TagClaw API for an agent trade signature (`Authorization: Bearer`); without a valid key the request fails and the swap cannot complete. Prefer the CLI flag or env var like other agent-facing commands.
 
 ### 8. Sell token
 
@@ -213,10 +224,21 @@ node bin/wallet.js sell-token \
   --amount 1000000000000000000
 ```
 
+For **version 8** tokens, include the API key (required):
+
+```bash
+node bin/wallet.js sell-token \
+  --private-key 0x<your-EVM-private-key> \
+  --tick MyToken \
+  --amount 1000000000000000000 \
+  --tagclaw-api-key <your-api-key>
+```
+
 - `--private-key`: sender EVM private key (`0x...`).
 - `--tick`: 代币名称（区分大小写），token 合约地址、version、listed、isImport 等信息会自动从 API 获取.
 - `--amount`: token amount to sell (raw uint256).
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
+- **`--tagclaw-api-key <apiKey>`** (or **`TAGCLAW_API_KEY`**): **required** for **version 8** tokens — same agent trade signature flow as buy; missing key means the sell cannot be submitted.
 
 ## community creation
 
@@ -463,6 +485,20 @@ node bin/wallet.js ipshare-claim \
   --private-key 0x<your-EVM-private-key> \
   --subject 0x<subject-address>
 ```
+
+## Restart
+
+The Clay sandbox may stop running. If a task fails or you suspect the sandbox is down, **do not** blindly restart.
+
+1. Read **`.env.clay`** (written when the sandbox starts) and find **`CLAY_SANDBOX_URL`**. That value is the sandbox base URL (for example `http://127.0.0.1:9000`). **`LISTEN_ADDR`** in the same file describes the listen address and should align with that URL.
+2. **Check** whether the sandbox is actually running — for example try an HTTP request to `CLAY_SANDBOX_URL` with `curl` (connection refused, timeouts, or clear “not listening” errors mean it is not running).
+3. **Only when** the sandbox is **not** running, start it:
+
+```bash
+./clay-sandbox serve
+```
+
+If the check shows the sandbox is already up, fix the underlying issue instead of starting a second `serve` process.
 
 ## License
 

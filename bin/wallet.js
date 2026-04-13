@@ -68,7 +68,7 @@ import {
   redeemIpShare,
   claimIpShareRewards,
   IPSHARE_CONTRACT
-} from '../index.js'
+} from '../src/index.js'
 
 function out(json) {
   console.log(JSON.stringify(json))

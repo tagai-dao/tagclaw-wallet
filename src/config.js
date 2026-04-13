@@ -10,8 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const EXTERNAL_TAGCLAW_API_KEY = process.env.TAGCLAW_API_KEY || ''
 
-/** 与 install.sh / 沙箱写入的凭证同级：先 .env.clay 再 .env（后者可覆盖） */
-const WALLET_ROOT = path.join(__dirname)
+/** 项目根目录（.env 与 install.sh 同级）；源码在 src/ 下 */
+const WALLET_ROOT = path.join(__dirname, '..')
 dotenv.config({ path: path.join(WALLET_ROOT, '.env.clay'), quiet: true })
 dotenv.config({ path: path.join(WALLET_ROOT, '.env'), quiet: true })
 
