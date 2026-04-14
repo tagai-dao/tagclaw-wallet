@@ -1,12 +1,14 @@
-const test = require('node:test')
-const assert = require('node:assert/strict')
-const { ethers } = require('ethers')
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { ethers } from 'ethers'
 
-const wallet = require('../index')
+import * as wallet from '../src/index.js'
+import {
+  __setPriceEthersTestDoubles,
+  __resetPriceEthersTestDoubles
+} from '../src/price.js'
 
 const originalFetch = global.fetch
-const OriginalJsonRpcProvider = ethers.JsonRpcProvider
-const OriginalContract = ethers.Contract
 
 function createResponse(body, { ok = true, status = 200 } = {}) {
   const textBody = JSON.stringify(body)
@@ -33,16 +35,7 @@ function createFetchQueue(responses) {
 
 function restoreRuntime() {
   global.fetch = originalFetch
-  Object.defineProperty(ethers, 'JsonRpcProvider', {
-    value: OriginalJsonRpcProvider,
-    configurable: true,
-    writable: true
-  })
-  Object.defineProperty(ethers, 'Contract', {
-    value: OriginalContract,
-    configurable: true,
-    writable: true
-  })
+  __resetPriceEthersTestDoubles()
 }
 
 test.afterEach(() => {
@@ -68,18 +61,13 @@ test('getTokenPrice returns import token prices from pair reserves and TagAI BNB
     createResponse('640.5')
   ])
 
-  Object.defineProperty(ethers, 'JsonRpcProvider', {
-    value: class FakeProvider {
+  __setPriceEthersTestDoubles({
+    JsonRpcProvider: class FakeProvider {
       constructor(rpcUrl) {
         this.rpcUrl = rpcUrl
       }
     },
-    configurable: true,
-    writable: true
-  })
-
-  Object.defineProperty(ethers, 'Contract', {
-    value: class FakeContract {
+    Contract: class FakeContract {
       constructor(address) {
         this.address = String(address).toLowerCase()
       }
@@ -97,9 +85,7 @@ test('getTokenPrice returns import token prices from pair reserves and TagAI BNB
         }
         return token
       }
-    },
-    configurable: true,
-    writable: true
+    }
   })
 
   const result = await wallet.getTokenPrice({ tick: 'TEST' })
@@ -130,18 +116,13 @@ test('getTokenPrice returns bonding curve price for unlisted token', async () =>
     createResponse(600)
   ])
 
-  Object.defineProperty(ethers, 'JsonRpcProvider', {
-    value: class FakeProvider {
+  __setPriceEthersTestDoubles({
+    JsonRpcProvider: class FakeProvider {
       constructor(rpcUrl) {
         this.rpcUrl = rpcUrl
       }
     },
-    configurable: true,
-    writable: true
-  })
-
-  Object.defineProperty(ethers, 'Contract', {
-    value: class FakeContract {
+    Contract: class FakeContract {
       constructor(address) {
         this.address = String(address).toLowerCase()
       }
@@ -159,9 +140,7 @@ test('getTokenPrice returns bonding curve price for unlisted token', async () =>
         assert.equal(amount, 10n ** 18n)
         return 25n * 10n ** 15n
       }
-    },
-    configurable: true,
-    writable: true
+    }
   })
 
   const result = await wallet.getTokenPrice({ tick: 'CURVE' })
@@ -176,7 +155,9 @@ test('getTokenPrice returns bonding curve price for unlisted token', async () =>
   assert.equal(result.tokenPriceUsd, 15)
 })
 
-// 集成测试：真实 API + 链上数据，需网络
+// 集成测试：真实 API + 链上数据，需网络（显式 TAGCLAW_WALLET_INTEGRATION=1 时运行）
+const runIntegration = process.env.TAGCLAW_WALLET_INTEGRATION === '1'
+
 function assertValidPriceResult(result, tick) {
   assert.equal(result.tick, tick)
   assert.ok(ethers.isAddress(result.token), `token should be valid address: ${result.token}`)
@@ -205,17 +186,29 @@ function assertValidPriceResult(result, tick) {
   )
 }
 
-test('getTokenPrice fetches real price for TagClaw', async () => {
-  const result = await wallet.getTokenPrice({ tick: 'TagClaw' })
-  assertValidPriceResult(result, 'TagClaw')
-})
+test(
+  'getTokenPrice fetches real price for TagClaw',
+  { skip: !runIntegration },
+  async () => {
+    const result = await wallet.getTokenPrice({ tick: 'TagClaw' })
+    assertValidPriceResult(result, 'TagClaw')
+  }
+)
 
-test('getTokenPrice fetches real price for BUIDL', async () => {
-  const result = await wallet.getTokenPrice({ tick: 'BUIDL' })
-  assertValidPriceResult(result, 'BUIDL')
-})
+test(
+  'getTokenPrice fetches real price for BUIDL',
+  { skip: !runIntegration },
+  async () => {
+    const result = await wallet.getTokenPrice({ tick: 'BUIDL' })
+    assertValidPriceResult(result, 'BUIDL')
+  }
+)
 
-test('getTokenPrice fetches real price for TTAI', async () => {
-  const result = await wallet.getTokenPrice({ tick: 'TTAI' })
-  assertValidPriceResult(result, 'TTAI')
-})
+test(
+  'getTokenPrice fetches real price for TTAI',
+  { skip: !runIntegration },
+  async () => {
+    const result = await wallet.getTokenPrice({ tick: 'TTAI' })
+    assertValidPriceResult(result, 'TTAI')
+  }
+)

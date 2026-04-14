@@ -17,7 +17,7 @@ const TOKEN_ALLOWANCE_ABI = [
   'function approve(address spender, uint256 amount) returns (bool)'
 ]
 
-module.exports = {
+export {
   ERC20_BALANCE_ABI,
   ERC20_TRANSFER_ABI,
   TOKEN_ALLOWANCE_ABI

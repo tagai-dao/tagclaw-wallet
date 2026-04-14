@@ -7,7 +7,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-BASE_URL="https://raw.githubusercontent.com/ClawWallet/Claw-Wallet-Skill/main"
+# Official skill distribution (same host as SKILL.md / install.sh in docs)
+BASE_URL="${CLAW_WALLET_SKILLS_BASE_URL:-https://www.clawwallet.cc/skills}"
 # Unix-only Claw files (parallel, one HTTP request each); .part avoids truncated files on failure
 CLAW_FILES=(
   install.sh

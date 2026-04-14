@@ -11,7 +11,7 @@ const WRAP_SWAPER2_ABI = [
   'function sellToken(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline, address sellsman, address uniswapRouter02)'
 ]
 
-module.exports = {
+export {
   WRAP_SWAPER_ABI,
   WRAP_SWAPER2_ABI
 }
