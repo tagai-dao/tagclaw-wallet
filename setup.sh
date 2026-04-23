@@ -54,9 +54,12 @@ chmod +x install.sh claw-wallet claw-wallet.sh 2>/dev/null || true
 echo "[3/4] bash install.sh"
 bash install.sh
 
-echo "[4/4] claw-address, steem-keys, sync-env"
+echo "[4/4] claw-address, sync-env"
 node bin/wallet.js claw-address
-node bin/wallet.js steem-keys
+# sync-env derives Steem keys and writes them into .env; it deliberately does
+# NOT print key material to stdout to avoid leaking private keys to the terminal
+# or install logs. Use `node bin/wallet.js steem-keys` manually if you need the
+# raw values outside the install flow.
 node bin/wallet.js sync-env
 
-echo "Done. Review .env and keep your keys secure."
+echo "Done. Keys are in .env (chmod 600). Keep them secure."

@@ -263,7 +263,15 @@ async function main() {
 
     if (cmd === 'sync-env') {
       const result = await syncTagclawWalletEnv({ rpcUrl: rpcUrl || undefined })
-      out({ ...result, envPath: result.envPath })
+      const wrote = [
+        'TAGCLAW_ETH_ADDR',
+        'TAGCLAW_STEEM_POSTING_PUB',
+        'TAGCLAW_STEEM_POSTING_PRI',
+        'TAGCLAW_STEEM_OWNER',
+        'TAGCLAW_STEEM_ACTIVE',
+        'TAGCLAW_STEEM_MEMO'
+      ]
+      out({ address: result.address, envPath: result.envPath, wrote })
       return
     }
 
