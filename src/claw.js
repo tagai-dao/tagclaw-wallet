@@ -89,7 +89,9 @@ async function ensureWalletReadyWithClient(client) {
   }
   try {
     await client.reactivateWallet()
-  } catch (_) {}
+  } catch (e) {
+    console.error(e)
+  }
   if (await tryReady()) return
   throw new Error(
     'Claw wallet not ready: could not read bsc/ethereum address after init/reactivate. Is clay-sandbox running?'
