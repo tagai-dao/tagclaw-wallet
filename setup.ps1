@@ -1,4 +1,4 @@
-# One-shot setup (Windows PowerShell): npm → parallel Claw downloads → install.ps1 → claw-address / steem-keys / sync-env
+# One-shot setup (Windows PowerShell): npm → download install.ps1 → install.ps1 → claw-address / steem-keys / sync-env
 # Run from tagclaw-wallet: .\setup.ps1
 # If scripts are blocked: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
@@ -8,13 +8,6 @@ Set-Location -LiteralPath $Root
 
 # Official skill distribution (same host as SKILL.md / install.ps1 in docs)
 $BaseUrl = if ($env:CLAW_WALLET_SKILLS_BASE_URL) { $env:CLAW_WALLET_SKILLS_BASE_URL } else { 'https://www.clawwallet.cc/skills' }
-# Windows-only Claw files (install.ps1 + launchers; no install.sh / claw-wallet.sh)
-$ClawFiles = @(
-  'install.ps1',
-  'claw-wallet',
-  'claw-wallet.cmd',
-  'claw-wallet.ps1'
-)
 
 function Assert-Command($Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -29,35 +22,15 @@ Assert-Command npm
 Write-Host '[1/4] npm install'
 npm install
 
-Write-Host "[2/4] Downloading Claw Wallet Skill files in parallel ($($ClawFiles.Count) files)"
-$jobs = @()
-foreach ($name in $ClawFiles) {
-  $jobs += Start-Job -ScriptBlock {
-    param($Base, $FileName, $Dest)
-    $uri = "$Base/$FileName"
-    $part = Join-Path $Dest "$FileName.part"
-    $final = Join-Path $Dest $FileName
-    Invoke-WebRequest -Uri $uri -OutFile $part -UseBasicParsing
-    Move-Item -LiteralPath $part -Destination $final -Force
-  } -ArgumentList $BaseUrl, $name, $Root
-}
-
-$jobs | Wait-Job | Out-Null
-$downloadFailed = $false
-foreach ($j in $jobs) {
-  try {
-    Receive-Job -Job $j -ErrorAction Stop | Out-Null
-  } catch {
-    $downloadFailed = $true
-    Write-Error $_
-  }
-}
-Remove-Job -Job $jobs -Force -ErrorAction SilentlyContinue
-if ($downloadFailed) {
-  foreach ($name in $ClawFiles) {
-    $p = Join-Path $Root "$name.part"
-    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
-  }
+Write-Host '[2/4] Downloading install.ps1'
+$installPart = Join-Path $Root 'install.ps1.part'
+$installFinal = Join-Path $Root 'install.ps1'
+try {
+  Invoke-WebRequest -Uri "$BaseUrl/install.ps1" -OutFile $installPart -UseBasicParsing
+  Move-Item -LiteralPath $installPart -Destination $installFinal -Force
+} catch {
+  if (Test-Path -LiteralPath $installPart) { Remove-Item -LiteralPath $installPart -Force }
+  Write-Error "Failed to download install.ps1. Check your network or CLAW_WALLET_SKILLS_BASE_URL."
   exit 1
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot setup: npm install → parallel Claw Skill downloads → install.sh → claw-address / steem-keys / sync-env
+# One-shot setup: npm install → download install.sh → install.sh → claw-address / sync-env
 # Run from the tagclaw-wallet directory: bash setup.sh
 
 set -euo pipefail
@@ -9,12 +9,6 @@ cd "$ROOT"
 
 # Official skill distribution (same host as SKILL.md / install.sh in docs)
 BASE_URL="${CLAW_WALLET_SKILLS_BASE_URL:-https://www.clawwallet.cc/skills}"
-# Unix-only Claw files (parallel, one HTTP request each); .part avoids truncated files on failure
-CLAW_FILES=(
-  install.sh
-  claw-wallet
-  claw-wallet.sh
-)
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -30,26 +24,14 @@ need_cmd curl
 echo "[1/4] npm install"
 npm install
 
-n="${#CLAW_FILES[@]}"
-echo "[2/4] Downloading Claw Wallet Skill files in parallel (${n} files)"
-pids=()
-for f in "${CLAW_FILES[@]}"; do
-  (
-    curl -fsSL "${BASE_URL}/${f}" -o "${ROOT}/${f}.part" && mv "${ROOT}/${f}.part" "${ROOT}/${f}"
-  ) &
-  pids+=($!)
-done
-failed=0
-for pid in "${pids[@]}"; do
-  wait "$pid" || failed=1
-done
-if (( failed )); then
-  echo "Failed to download Claw files. Check your network or BASE_URL." >&2
-  rm -f "${CLAW_FILES[@]/%/.part}"
+echo "[2/4] Downloading install.sh"
+if ! curl -fsSL "${BASE_URL}/install.sh" -o "${ROOT}/install.sh.part"; then
+  echo "Failed to download install.sh. Check your network or BASE_URL." >&2
+  rm -f "${ROOT}/install.sh.part"
   exit 1
 fi
-
-chmod +x install.sh claw-wallet claw-wallet.sh 2>/dev/null || true
+mv "${ROOT}/install.sh.part" "${ROOT}/install.sh"
+chmod +x install.sh
 
 echo "[3/4] bash install.sh"
 bash install.sh

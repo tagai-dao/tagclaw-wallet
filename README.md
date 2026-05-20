@@ -73,14 +73,14 @@ bash setup.sh
 
 If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in the same window, then `.\setup.ps1` again.
 
-`setup.sh` and `setup.ps1` each download only the [Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill) files required on that platform (in parallel).
+`setup.sh` downloads `install.sh`; `setup.ps1` downloads `install.ps1` from [Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill). The installer script fetches any other platform files it needs.
 
 ## What the setup script does
 
 The one-shot setup script performs the critical steps in order:
 
 1. `npm install`
-2. download the Claw Wallet Skill files
+2. download `install.sh` (Unix) or `install.ps1` (Windows)
 3. run the Claw installer
 4. resolve `claw-address`
 5. generate `steem-keys`
