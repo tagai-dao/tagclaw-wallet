@@ -3,19 +3,19 @@
  * tagclaw-wallet CLI — wallet-only capabilities with JSON output for agent parsing
  *
  * Usage:
- *   # Claw 沙箱：按 README 从 Claw-Wallet-Skill 下载脚本后 bash install.sh（在 tagclaw-wallet 目录）
+ *   node bin/wallet.js create-wallet   # 新账号本地创建并写入 .env；已有钱包复用
  *   node bin/wallet.js claw-address
  *   node bin/wallet.js bind-wallet --message-hex <64-hex-from-bind-page>
- *   node bin/wallet.js sync-env   # Claw 地址 + Steem 密钥写入同级 .env
- *   node bin/wallet.js steem-keys   # 默认 Claw 签名派生；可选 --private-key 走 legacy
- *   node bin/wallet.js sign --message "..."   # 默认 Claw；可选 --private-key
+ *   node bin/wallet.js sync-env   # 当前钱包地址 + Steem 密钥写入 .env
+ *   node bin/wallet.js steem-keys   # 使用本地私钥或已有 Claw 派生
+ *   node bin/wallet.js sign --message "..."   # 自动读取当前钱包；可选 --private-key
  *   node bin/wallet.js balance-bnb --address 0x...
  *   node bin/wallet.js balance-erc20 --address 0x... --token 0x...
  *   node bin/wallet.js transfer-bnb --private-key 0x... --to 0x... --amount 0.01
  *   node bin/wallet.js transfer-erc20 --private-key 0x... --token 0x... --to 0x... --amount 100
  *   node bin/wallet.js buy-token --private-key 0x... --tick MyToken --eth-amount 1000000000000000
  *   node bin/wallet.js sell-token --private-key 0x... --tick MyToken --amount 1000000000000000000
- *   node bin/wallet.js create-community --tick MyToken --quote-only
+ *   node bin/wallet.js create-community --tick MyToken --index-config index.json --quote-only
  *   node bin/wallet.js price-token --tick TagClaw
  *   node bin/wallet.js nutbox-community --ctoken 0x...
  *   node bin/wallet.js nutbox-pool --pool 0x...
@@ -25,7 +25,11 @@
  *
  * On success, outputs exactly one JSON line to stdout; errors go to stderr and exit with code 1.
  */
+import { readFileSync } from 'node:fs'
 import {
+  initWallet,
+  getWalletAddress,
+  getLocalPrivateKey,
   generateSteemKeys,
   generateSteemKeysFromClaw,
   signMessage,
@@ -117,9 +121,16 @@ function parseArgs() {
   let deadline = ''
   let salt = ''
   let quoteOnly = false
+  let version
+  let indexConfigFile
+  let initialBuy
+  let tradeRewardRatio
   for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--private-key' && args[i + 1]) privateKey = args[++i]
-    else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
+    if (args[i] === '--private-key') {
+      const value = args[++i]
+      if (!value || value.startsWith('--') || !value.trim()) err('--private-key requires a non-empty EVM private key')
+      privateKey = value
+    } else if (args[i] === '--message') { i++; message = args[i] !== undefined ? args[i] : '' }
     else if (args[i] === '--address' && args[i + 1]) address = args[++i]
     else if (args[i] === '--token' && args[i + 1]) token = args[++i]
     else if (args[i] === '--tick' && args[i + 1]) tick = args[++i]
@@ -152,6 +163,15 @@ function parseArgs() {
     else if (args[i] === '--deadline' && args[i + 1]) deadline = args[++i]
     else if (args[i] === '--salt' && args[i + 1]) salt = args[++i]
     else if (args[i] === '--quote-only') quoteOnly = true
+    else if (['--version', '--index-config', '--initial-buy', '--trade-reward-ratio'].includes(args[i])) {
+      const flag = args[i]
+      const value = args[++i]
+      if (!value || value.startsWith('--')) err(`${flag} requires a value`)
+      if (flag === '--version') version = Number(value)
+      if (flag === '--index-config') indexConfigFile = value
+      if (flag === '--initial-buy') initialBuy = value
+      if (flag === '--trade-reward-ratio') tradeRewardRatio = Number(value)
+    }
     else if (args[i] === '--message-hex') {
       i++
       bindMessageHash = args[i] !== undefined ? String(args[i]).trim() : ''
@@ -193,6 +213,7 @@ function parseArgs() {
     deadline,
     salt,
     quoteOnly,
+    version, indexConfigFile, initialBuy, tradeRewardRatio,
     bindMessageHash
   }
 }
@@ -234,16 +255,28 @@ async function main() {
     deadline,
     salt,
     quoteOnly,
+    version, indexConfigFile, initialBuy, tradeRewardRatio,
     bindMessageHash
   } = parseArgs()
 
   if (!cmd) {
     err(
-      'Usage: node bin/wallet.js <claw-address|bind-wallet|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|create-community|nutbox-community|nutbox-pool|nutbox-factories|nutbox-committee-fees|nutbox-add-erc20-staking-pool|nutbox-add-erc20-locking-pool|nutbox-add-erc1155-pool|nutbox-set-pool-ratios|nutbox-claim-rewards|nutbox-deposit-erc20-staking|nutbox-withdraw-erc20-staking|nutbox-deposit-erc20-locking|nutbox-withdraw-erc20-locking|nutbox-redeem-erc20-locking|nutbox-deposit-erc1155|nutbox-withdraw-erc1155|nutbox-harvest-social-pool|nutbox-claim-social-pool|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
+      'Usage: node bin/wallet.js <create-wallet|init-wallet|address|claw-address|bind-wallet|sync-env|steem-keys|sign|balance-bnb|balance-erc20|price-token|transfer-bnb|transfer-erc20|buy-token|sell-token|create-community|nutbox-community|nutbox-pool|nutbox-factories|nutbox-committee-fees|nutbox-add-erc20-staking-pool|nutbox-add-erc20-locking-pool|nutbox-add-erc1155-pool|nutbox-set-pool-ratios|nutbox-claim-rewards|nutbox-deposit-erc20-staking|nutbox-withdraw-erc20-staking|nutbox-deposit-erc20-locking|nutbox-withdraw-erc20-locking|nutbox-redeem-erc20-locking|nutbox-deposit-erc1155|nutbox-withdraw-erc1155|nutbox-harvest-social-pool|nutbox-claim-social-pool|ipshare-supply|ipshare-balance|ipshare-stake-info|ipshare-pending-rewards|ipshare-create|ipshare-buy|ipshare-sell|ipshare-stake|ipshare-unstake|ipshare-redeem|ipshare-claim> [options]'
     )
   }
 
   try {
+    if (cmd === 'create-wallet' || cmd === 'init-wallet') {
+      const result = await initWallet({ privateKey: privateKey || undefined, rpcUrl: rpcUrl || undefined })
+      out({ address: result.address, backend: result.backend, envPath: result.envPath })
+      return
+    }
+
+    if (cmd === 'address') {
+      out({ address: await getWalletAddress() })
+      return
+    }
+
     if (cmd === 'claw-address') {
       const address = await getClawWalletAddress(chain || undefined)
       out(chain ? { address, chain } : { address })
@@ -262,8 +295,10 @@ async function main() {
     }
 
     if (cmd === 'sync-env') {
-      const result = await syncTagclawWalletEnv({ rpcUrl: rpcUrl || undefined })
+      const result = await syncTagclawWalletEnv({ privateKey: privateKey || undefined, rpcUrl: rpcUrl || undefined })
       const wrote = [
+        'TAGCLAW_WALLET_BACKEND',
+        ...(result.backend === 'local' ? ['TAGCLAW_PRIVATE_KEY'] : []),
         'TAGCLAW_ETH_ADDR',
         'TAGCLAW_STEEM_POSTING_PUB',
         'TAGCLAW_STEEM_POSTING_PRI',
@@ -271,20 +306,21 @@ async function main() {
         'TAGCLAW_STEEM_ACTIVE',
         'TAGCLAW_STEEM_MEMO'
       ]
-      out({ address: result.address, envPath: result.envPath, wrote })
+      out({ address: result.address, backend: result.backend, envPath: result.envPath, wrote })
       return
     }
 
     if (cmd === 'steem-keys') {
-      const result = privateKey
-        ? generateSteemKeys(privateKey)
+      const localKey = getLocalPrivateKey(privateKey)
+      const result = localKey
+        ? generateSteemKeys(localKey)
         : await generateSteemKeysFromClaw({ rpcUrl: rpcUrl || undefined })
       out(result)
       return
     }
 
     if (cmd === 'sign') {
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const pk = privateKey || undefined
       const signature = await signMessage(pk, message || '')
       out({ signature })
       return
@@ -320,7 +356,7 @@ async function main() {
     if (cmd === 'transfer-bnb') {
       if (!to) err('transfer-bnb requires --to 0x...')
       if (!amount) err('transfer-bnb requires --amount <ether or wei>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const pk = privateKey || undefined
       const result = await transferBnb(pk, to, amount, rpcUrl || undefined)
       out(result)
       return
@@ -330,7 +366,7 @@ async function main() {
       if (!token) err('transfer-erc20 requires --token 0x... (ERC20 contract address)')
       if (!to) err('transfer-erc20 requires --to 0x...')
       if (!amount) err('transfer-erc20 requires --amount <human amount>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : ''
+      const pk = privateKey || undefined
       const result = await transferErc20(pk, token, to, amount, rpcUrl || undefined)
       out(result)
       return
@@ -339,9 +375,10 @@ async function main() {
     if (cmd === 'buy-token') {
       if (!tick) err('buy-token requires --tick <token-name>')
       if (!ethAmount) err('buy-token requires --eth-amount <wei>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
 
       const result = await buyToken({
+        quoteOnly,
         privateKey: pk,
         tick,
         ethAmount,
@@ -359,9 +396,10 @@ async function main() {
     if (cmd === 'sell-token') {
       if (!tick) err('sell-token requires --tick <token-name>')
       if (!amount) err('sell-token requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
 
       const result = await sellToken({
+        quoteOnly,
         privateKey: pk,
         tick,
         amount,
@@ -377,8 +415,12 @@ async function main() {
 
     if (cmd === 'create-community') {
       if (!tick) err('create-community requires --tick <token-name>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await createCommunity({
+        version,
+        indexConfig: indexConfigFile ? JSON.parse(readFileSync(indexConfigFile, 'utf8')) : undefined,
+        initialBuy,
+        tradeRewardRatio,
         privateKey: pk,
         tick,
         salt: salt || undefined,
@@ -430,7 +472,7 @@ async function main() {
       if (!name) err('nutbox-add-erc20-staking-pool requires --name "Pool Name"')
       if (!stakeToken) err('nutbox-add-erc20-staking-pool requires --stake-token 0x...')
       if (!ratios) err('nutbox-add-erc20-staking-pool requires --ratios 7000,3000')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await addNutboxErc20StakingPool({
         privateKey: pk,
         community,
@@ -448,7 +490,7 @@ async function main() {
       if (!stakeToken) err('nutbox-add-erc20-locking-pool requires --stake-token 0x...')
       if (!lockDuration) err('nutbox-add-erc20-locking-pool requires --lock-duration <seconds>')
       if (!ratios) err('nutbox-add-erc20-locking-pool requires --ratios 7000,3000')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await addNutboxErc20LockingPool({
         privateKey: pk,
         community,
@@ -467,7 +509,7 @@ async function main() {
       if (!stakeToken) err('nutbox-add-erc1155-pool requires --stake-token 0x...')
       if (!tokenId) err('nutbox-add-erc1155-pool requires --token-id <id>')
       if (!ratios) err('nutbox-add-erc1155-pool requires --ratios 7000,3000')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await addNutboxErc1155Pool({
         privateKey: pk,
         community,
@@ -483,7 +525,7 @@ async function main() {
     if (cmd === 'nutbox-set-pool-ratios') {
       if (!community) err('nutbox-set-pool-ratios requires --community 0x...')
       if (!ratios) err('nutbox-set-pool-ratios requires --ratios 7000,3000')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await setNutboxPoolRatios({
         privateKey: pk,
         community,
@@ -496,7 +538,7 @@ async function main() {
     if (cmd === 'nutbox-claim-rewards') {
       if (!community) err('nutbox-claim-rewards requires --community 0x...')
       if (!pools) err('nutbox-claim-rewards requires --pools 0xPOOL1,0xPOOL2')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await claimNutboxRewards({
         privateKey: pk,
         community,
@@ -509,7 +551,7 @@ async function main() {
     if (cmd === 'nutbox-deposit-erc20-staking' || cmd === 'nutbox-deposit-erc20-locking') {
       if (!pool) err(`${cmd} requires --pool 0x...`)
       if (!amount) err(`${cmd} requires --amount <raw uint256>`)
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await depositNutboxErc20Pool({
         privateKey: pk,
         pool,
@@ -522,7 +564,7 @@ async function main() {
     if (cmd === 'nutbox-withdraw-erc20-staking' || cmd === 'nutbox-withdraw-erc20-locking') {
       if (!pool) err(`${cmd} requires --pool 0x...`)
       if (!amount) err(`${cmd} requires --amount <raw uint256>`)
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await withdrawNutboxErc20Pool({
         privateKey: pk,
         pool,
@@ -534,7 +576,7 @@ async function main() {
 
     if (cmd === 'nutbox-redeem-erc20-locking') {
       if (!pool) err('nutbox-redeem-erc20-locking requires --pool 0x...')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await redeemNutboxErc20Locking({
         privateKey: pk,
         pool,
@@ -546,7 +588,7 @@ async function main() {
     if (cmd === 'nutbox-deposit-erc1155') {
       if (!pool) err('nutbox-deposit-erc1155 requires --pool 0x...')
       if (!amount) err('nutbox-deposit-erc1155 requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await depositNutboxErc1155Pool({
         privateKey: pk,
         pool,
@@ -559,7 +601,7 @@ async function main() {
     if (cmd === 'nutbox-withdraw-erc1155') {
       if (!pool) err('nutbox-withdraw-erc1155 requires --pool 0x...')
       if (!amount) err('nutbox-withdraw-erc1155 requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await withdrawNutboxErc1155Pool({
         privateKey: pk,
         pool,
@@ -571,7 +613,7 @@ async function main() {
 
     if (cmd === 'nutbox-harvest-social-pool') {
       if (!pool) err('nutbox-harvest-social-pool requires --pool 0x...')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await harvestNutboxSocialPool({
         privateKey: pk,
         pool,
@@ -586,7 +628,7 @@ async function main() {
       if (!amount) err('nutbox-claim-social-pool requires --amount <raw uint256>')
       if (!deadline) err('nutbox-claim-social-pool requires --deadline <unix seconds>')
       if (!signature) err('nutbox-claim-social-pool requires --signature 0x...')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       out(await claimNutboxSocialPool({
         privateKey: pk,
         pool,
@@ -631,7 +673,7 @@ async function main() {
     }
 
     if (cmd === 'ipshare-create') {
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await createIpShare({
         privateKey: pk,
         subject: subject || undefined,
@@ -645,7 +687,7 @@ async function main() {
     if (cmd === 'ipshare-buy') {
       if (!subject) err('ipshare-buy requires --subject 0x...')
       if (!value) err('ipshare-buy requires --value <wei>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await buyIpShare({
         privateKey: pk,
         subject,
@@ -660,7 +702,7 @@ async function main() {
     if (cmd === 'ipshare-sell') {
       if (!subject) err('ipshare-sell requires --subject 0x...')
       if (!amount) err('ipshare-sell requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await sellIpShare({
         privateKey: pk,
         subject,
@@ -675,7 +717,7 @@ async function main() {
     if (cmd === 'ipshare-stake') {
       if (!subject) err('ipshare-stake requires --subject 0x...')
       if (!amount) err('ipshare-stake requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await stakeIpShare({
         privateKey: pk,
         subject,
@@ -689,7 +731,7 @@ async function main() {
     if (cmd === 'ipshare-unstake') {
       if (!subject) err('ipshare-unstake requires --subject 0x...')
       if (!amount) err('ipshare-unstake requires --amount <raw uint256>')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await unstakeIpShare({
         privateKey: pk,
         subject,
@@ -702,7 +744,7 @@ async function main() {
 
     if (cmd === 'ipshare-redeem') {
       if (!subject) err('ipshare-redeem requires --subject 0x...')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await redeemIpShare({
         privateKey: pk,
         subject,
@@ -714,7 +756,7 @@ async function main() {
 
     if (cmd === 'ipshare-claim') {
       if (!subject) err('ipshare-claim requires --subject 0x...')
-      const pk = privateKey && privateKey.startsWith('0x') ? privateKey : undefined
+      const pk = privateKey || undefined
       const result = await claimIpShareRewards({
         privateKey: pk,
         subject,

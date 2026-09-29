@@ -45,7 +45,7 @@ async function getErc20Balance(address, tokenContractAddress, rpcUrl = DEFAULT_B
 
 /**
  * Transfer native BNB to a target address
- * @param {string} [privateKey] - 本地私钥；省略则使用 Claw
+ * @param {string} [privateKey] - 本地私钥；省略则使用已配置的本地或 Claw 钱包
  * @param {string} toAddress - recipient address, 0x-prefixed
  * @param {string} amount - amount as wei string or ether string (e.g. "0.01")
  * @param {string} [rpcUrl] - RPC URL, defaults to DEFAULT_BNB_RPC
@@ -74,7 +74,7 @@ async function transferBnb(privateKey, toAddress, amount, rpcUrl = DEFAULT_BNB_R
 
 /**
  * Transfer ERC20 to a target address
- * @param {string} [privateKey] - 本地私钥；省略则使用 Claw
+ * @param {string} [privateKey] - 本地私钥；省略则使用已配置的本地或 Claw 钱包
  * @param {string} tokenContractAddress - ERC20 contract address, 0x-prefixed
  * @param {string} toAddress - recipient address, 0x-prefixed
  * @param {string} amount - human-readable amount, converted using token decimals

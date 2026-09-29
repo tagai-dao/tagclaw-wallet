@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
+import { randomUUID } from 'node:crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -120,47 +121,67 @@ function formatEnvLine(key, value) {
   return `${key}=${s}`
 }
 
+function readWalletEnv() {
+  const envPath = path.join(WALLET_ROOT, '.env')
+  const saved = fs.existsSync(envPath) ? dotenv.parse(fs.readFileSync(envPath)) : {}
+  return { ...saved, ...process.env }
+}
+
 /**
  * 将 EVM 地址与 Steem 材料合并写入 tagclaw-wallet/.env（保留其它已有行）
  * 键名与 POST /tagclaw/register 一致：ethAddr → TAGCLAW_ETH_ADDR；steemKeys.* → TAGCLAW_STEEM_*
- * @param {{ address: string, steemKeys: object }} data
+ * @param {{ address: string, steemKeys: object, privateKey?: string, backend?: string }} data
  */
 function mergeTagclawWalletEnv(data) {
-  const { address, steemKeys } = data
+  const { address, steemKeys, privateKey, backend } = data
   const envPath = path.join(WALLET_ROOT, '.env')
-  const keysToSet = new Set([
-    'TAGCLAW_ETH_ADDR',
-    'TAGCLAW_STEEM_POSTING_PUB',
-    'TAGCLAW_STEEM_POSTING_PRI',
-    'TAGCLAW_STEEM_OWNER',
-    'TAGCLAW_STEEM_ACTIVE',
-    'TAGCLAW_STEEM_MEMO'
-  ])
   const entries = {
     TAGCLAW_ETH_ADDR: address,
     TAGCLAW_STEEM_POSTING_PUB: steemKeys.postingPub,
     TAGCLAW_STEEM_POSTING_PRI: steemKeys.postingPri,
     TAGCLAW_STEEM_OWNER: steemKeys.owner,
     TAGCLAW_STEEM_ACTIVE: steemKeys.active,
-    TAGCLAW_STEEM_MEMO: steemKeys.memo
+    TAGCLAW_STEEM_MEMO: steemKeys.memo,
+    ...(privateKey ? { TAGCLAW_PRIVATE_KEY: privateKey } : {}),
+    ...(backend ? { TAGCLAW_WALLET_BACKEND: backend } : {})
   }
+  const keysToSet = new Set(Object.keys(entries))
   const lines = []
   if (fs.existsSync(envPath)) {
-    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-      const m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)
+    const content = fs.readFileSync(envPath, 'utf8')
+    const saved = dotenv.parse(content)
+    for (const [key, value] of Object.entries(entries)) {
+      const old = saved[key]
+      const matches = key === 'TAGCLAW_ETH_ADDR' || key === 'TAGCLAW_PRIVATE_KEY'
+        ? old?.toLowerCase() === value.toLowerCase()
+        : old === value
+      if (old && !matches) {
+        throw new Error(`Refusing to replace existing wallet field ${key}; use a separate wallet directory for a new identity`)
+      }
+    }
+    for (const line of content.split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line)
       if (m && keysToSet.has(m[1])) continue
       lines.push(line)
     }
   }
   const tail = Object.entries(entries).map(([k, v]) => formatEnvLine(k, v))
   const body = [...lines, ...tail].join('\n').trimEnd()
-  fs.writeFileSync(envPath, (body ? body + '\n' : tail.join('\n') + '\n'), 'utf8')
+  const tempPath = `${envPath}.${randomUUID()}.tmp`
+  try {
+    fs.writeFileSync(tempPath, body + '\n', { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    fs.renameSync(tempPath, envPath)
+  } finally {
+    fs.rmSync(tempPath, { force: true })
+  }
+  Object.assign(process.env, entries)
   return envPath
 }
 
 export {
   _config,
   WALLET_ROOT,
+  readWalletEnv,
   configure,
   resolveRequestConfig,
   fetchTokenInfo,

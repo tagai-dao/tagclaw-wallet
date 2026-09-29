@@ -26,6 +26,8 @@ import {
 } from './constants.js'
 import { fetchTokenInfo, requestJson } from './config.js'
 import { resolveWriteSigner } from './claw.js'
+import { evm } from './evm.js'
+import { tradeV14 } from './v14.js'
 import {
   getBuyAmountUseEth,
   getSellAmountUseToken,
@@ -57,7 +59,7 @@ async function fetchAgentTradeSignature(tokenAddr, ethAddr, requestConfig = {}) 
  * Buy token (aligned with tiptag-ui src/utils/pump.ts buyToken branch logic)
  * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
- * @param {string} [params.privateKey] - 本地私钥；省略则使用 Claw 沙箱签名
+ * @param {string} [params.privateKey] - 本地私钥；省略则使用已配置的本地或 Claw 钱包
  * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.ethAmount - input BNB amount (wei)
  * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
@@ -98,6 +100,13 @@ async function buyToken(params) {
   }
   const slippageBps = normalizeSlippage(slippage)
   const sellsmanAddr = normalizeSellsman(sellsman)
+
+  if (version === 14 && !isImport) {
+    const signer = await evm.signer(privateKey, rpcUrl)
+    return tradeV14({ token, signer, isBuy: true, amount: ethAmountBn, sellsman: sellsmanAddr, slippage: slippageBps, quoteOnly: params.quoteOnly })
+  }
+  if (params.quoteOnly) throw new Error('QUOTE_ONLY_UNSUPPORTED: trade quotes currently require a native v14 token')
+  if (!isImport && version > 8) throw new Error(`UNSUPPORTED_TRADE_VERSION: ${version}`)
 
   const wallet = await resolveWriteSigner(privateKey, rpcUrl)
   const provider = wallet.provider
@@ -206,7 +215,7 @@ async function buyToken(params) {
  * Sell token (aligned with tiptag-ui src/utils/pump.ts sellToken branch logic)
  * version / listed / isImport 会自动通过 community detail API 获取，无需外部传入
  * @param {Object} params
- * @param {string} [params.privateKey] - 本地私钥；省略则使用 Claw
+ * @param {string} [params.privateKey] - 本地私钥；省略则使用已配置的本地或 Claw 钱包
  * @param {string} params.tick - 代币名称（区分大小写）
  * @param {string|bigint|number} params.amount - token amount to sell (raw)
  * @param {string|null|undefined} [params.sellsman] - referrer address, 默认零地址
@@ -244,6 +253,13 @@ async function sellToken(params) {
   }
   const slippageBps = normalizeSlippage(slippage)
   const sellsmanAddr = normalizeSellsman(sellsman)
+
+  if (version === 14 && !isImport) {
+    const signer = await evm.signer(privateKey, rpcUrl)
+    return tradeV14({ token, signer, isBuy: false, amount: amountBn, sellsman: sellsmanAddr, slippage: slippageBps, quoteOnly: params.quoteOnly })
+  }
+  if (params.quoteOnly) throw new Error('QUOTE_ONLY_UNSUPPORTED: trade quotes currently require a native v14 token')
+  if (!isImport && version > 8) throw new Error(`UNSUPPORTED_TRADE_VERSION: ${version}`)
 
   const wallet = await resolveWriteSigner(privateKey, rpcUrl)
   const provider = wallet.provider

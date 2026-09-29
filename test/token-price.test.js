@@ -165,8 +165,8 @@ function assertValidPriceResult(result, tick) {
   assert.equal(typeof result.listed, 'boolean')
   assert.equal(typeof result.isImport, 'boolean')
   assert.ok(
-    result.pair === null || ethers.isAddress(result.pair),
-    `pair should be null or address: ${result.pair}`
+    result.pair === null || ethers.isAddress(result.pair) || ethers.isHexString(result.pair, 32),
+    `pair should be null, address or V4 pool ID: ${result.pair}`
   )
   assert.ok(
     typeof result.bnbPriceUsd === 'number' && result.bnbPriceUsd > 0,

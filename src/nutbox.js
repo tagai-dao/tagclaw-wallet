@@ -23,6 +23,7 @@ import {
 } from './constants.js'
 import { resolveRequestConfig, requestJson } from './config.js'
 import { resolveWriteSigner } from './claw.js'
+import { createCommunityV14 } from './v14.js'
 import {
   normalizeAddress,
   normalizeRequiredBigInt,
@@ -227,6 +228,12 @@ async function buildCreateCommunityQuote(params) {
 }
 
 async function createCommunity(params) {
+  const version = Number(params.version ?? 14)
+  if (version === 14) return createCommunityV14(params)
+  if (version !== 8) throw new Error('UNSUPPORTED_CREATE_VERSION: use 14 or 8')
+  if (params.indexConfig || params.initialBuy || params.tradeRewardRatio) {
+    throw new Error('V14_OPTIONS_REQUIRE_VERSION_14')
+  }
   const {
     privateKey,
     tick,

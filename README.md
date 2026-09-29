@@ -6,89 +6,33 @@ Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB C
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
 - **Runtime**: Node.js 18+ (uses native `fetch`)
 
-## When you can skip Claw Wallet
+## Wallet creation and compatibility
 
-If TagClaw registration is already done and you already have a stored EVM private key for that identity, you do not need to install or configure Claw Wallet just to use this CLI. You can pass `--private-key 0x...` on supported commands, or use your own secure signing path.
+New accounts use a locally generated EVM private key, saved in this wallet directory's `.env`. Setup no longer downloads or runs the Claw Wallet installer.
 
-Use Claw Wallet when you want sandbox custody instead of holding a raw key in the agent environment.
-
-Decision rule for agents:
-
-- If you already have a valid EVM private key for the current TagClaw identity, skip Claw Wallet setup.
-- If you do not have a usable wallet yet and need `ethAddr` plus `steemKeys`, use the setup flow below.
-
-## Fast path for agents
-
-If you are preparing a new TagClaw agent wallet, use this path:
-
-1. Run the one-shot setup script:
-   - macOS / Linux: `bash setup.sh`
-   - Windows PowerShell: `.\setup.ps1`
-2. Wait for the script to finish on its own.
-3. Read the wallet directory `.env`.
-4. Use those values for later TagClaw registration or wallet actions.
-
-After setup completes, the wallet `.env` should contain:
-
-```dotenv
-TAGCLAW_ETH_ADDR=0x...
-TAGCLAW_STEEM_POSTING_PUB=STM...
-TAGCLAW_STEEM_POSTING_PRI=5K...
-TAGCLAW_STEEM_OWNER=STM...
-TAGCLAW_STEEM_ACTIVE=STM...
-TAGCLAW_STEEM_MEMO=STM...
-```
-
-For TagClaw registration, assemble:
-
-- `ethAddr` from `TAGCLAW_ETH_ADDR`
-- `steemKeys` from the `TAGCLAW_STEEM_*` values above
-
-## Claw Wallet
-
-**Claw Wallet** is a secure, agent-oriented wallet. It combines sharding, a sandbox model, configurable risk controls, and other layered safeguards to protect agent-held funds.
+Existing Claw Wallet accounts remain supported: their address lookup, signing, transactions, binding, and signature-based Steem derivation continue through the sandbox. Setup detects an existing `.env.clay`, `identity.json`, or Claw connection environment and reuses it. An unavailable or incomplete sandbox configuration produces an error instead of creating a replacement identity.
 
 ## Installation
 
 Requires **Node.js 18+** and **npm**. From the **`tagclaw-wallet`** directory:
 
-Important:
-- The installer inside setup can take a long time.
-- Let `setup.sh` or `setup.ps1` run until it exits on its own.
-- If the terminal looks idle, keep waiting.
-- Do not kill the process early.
-- If you are acting for a human owner, share the full install output when they ask for progress.
-
-**macOS / Linux**
-
 ```bash
+# macOS / Linux
 bash setup.sh
 ```
 
-**Windows (PowerShell)**
-
 ```powershell
+# Windows PowerShell
 .\setup.ps1
 ```
 
-If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in the same window, then `.\setup.ps1` again.
+Both scripts run `npm install` followed by `node bin/wallet.js init-wallet`. You can also run those commands manually. `create-wallet` is an alias for `init-wallet`: both persist a new local wallet or reuse the existing wallet. Re-running setup keeps the same address and keys. An existing address or Steem identity without its signing credentials blocks creation; restore its credentials first.
 
-`setup.sh` downloads `install.sh`; `setup.ps1` downloads `install.ps1` from [Claw-Wallet-Skill](https://github.com/ClawWallet/Claw-Wallet-Skill). The installer script fetches any other platform files it needs.
-
-## What the setup script does
-
-The one-shot setup script performs the critical steps in order:
-
-1. `npm install`
-2. download `install.sh` (Unix) or `install.ps1` (Windows)
-3. run the Claw installer
-4. resolve `claw-address`
-5. generate `steem-keys`
-6. run `sync-env`
-
-After setup completes, the wallet `.env` should contain the values most TagClaw agent flows need:
+New local wallets save:
 
 ```dotenv
+TAGCLAW_WALLET_BACKEND=local
+TAGCLAW_PRIVATE_KEY=0x...
 TAGCLAW_ETH_ADDR=0x...
 TAGCLAW_STEEM_POSTING_PUB=STM...
 TAGCLAW_STEEM_POSTING_PRI=5K...
@@ -97,12 +41,26 @@ TAGCLAW_STEEM_ACTIVE=STM...
 TAGCLAW_STEEM_MEMO=STM...
 ```
 
-For TagClaw registration, assemble:
+The file is written atomically with mode `0600` on POSIX systems. On Windows, protect the wallet directory with your user account's filesystem permissions. Keep `.env` backed up securely; it contains the unencrypted EVM and Steem posting private keys. Setup and `create-wallet` print only address/backend/file metadata, never private keys.
 
-- `ethAddr` from `TAGCLAW_ETH_ADDR`
-- `steemKeys` from the `TAGCLAW_STEEM_*` values above
+For TagClaw registration, use `TAGCLAW_ETH_ADDR` as `ethAddr` and the `TAGCLAW_STEEM_*` fields as `steemKeys`. Local wallets retain the original private-key-based Steem derivation. Claw wallets retain the signature-based derivation; changing between them is not an account migration.
 
-This is the recommended path for TagClaw agent wallet bootstrap.
+## Wallet commands
+
+```bash
+node bin/wallet.js create-wallet  # create and save, or reuse an existing wallet
+node bin/wallet.js address        # current local or Claw EVM address
+node bin/wallet.js sync-env       # synchronize the configured wallet's address and Steem keys
+node bin/wallet.js steem-keys      # explicitly outputs Steem keys, including posting private key
+```
+
+To import an existing local wallet, supply `TAGCLAW_PRIVATE_KEY` in `.env` or the environment, then run `sync-env`. `--private-key` is also supported by `sync-env` and `init-wallet`. Synchronization preserves unrelated `.env` entries and refuses to overwrite an existing wallet's address, backend, or different Steem keys. Use a separate directory for another identity.
+
+The JavaScript `createWallet()` API returns `{ address, privateKey }` in memory, as in older releases. `await initWallet()` persists/reuses the wallet; `await getWalletAddress()` resolves its address.
+
+## Existing Claw Wallet accounts
+
+Keep `.env.clay`, `identity.json`, and the existing sandbox files. With no local key configured, old installations automatically use Claw. Successful synchronization records `TAGCLAW_WALLET_BACKEND=claw` and does not save an EVM private key. `claw-address` and `bind-wallet` remain Claw-specific commands.
 
 ## Bind wallet to Claw UI
 
@@ -124,12 +82,14 @@ node bin/wallet.js bind-wallet --message-hex <your-message-hex-string>
 
 ## Usage
 
-By default, signing and on-chain writes go through **Claw Wallet** when the sandbox is installed and running.
+Signing and on-chain writes select credentials in this order:
 
-- **Claw Wallet installed:** For every CLI command below whose example includes `--private-key`, that flag is **not required**. Omit it to sign and send through the sandbox; add `--private-key` only when you intentionally use a local/raw key.
-- **No Claw Wallet / raw key only:** Pass **`--private-key 0x<EVM-private-key>`** on supported commands (same contract as older releases).
+1. An explicit `--private-key` (or JavaScript `privateKey` argument).
+2. The backend in `TAGCLAW_WALLET_BACKEND`, if set (`local` or `claw`).
+3. `TAGCLAW_PRIVATE_KEY` from the environment or wallet `.env`.
+4. An existing Claw Wallet configuration.
 
-The bash examples in sections 5–19 show `--private-key` for the raw-key path; mentally treat it as optional whenever Claw Wallet is available.
+All write commands use this same selection, including transfers, token trades, IPShare, and Nutbox. A malformed local key fails without falling back to Claw. For configured wallets, omit `--private-key` from the examples below. `TAGCLAW_WALLET_BACKEND=claw` keeps Claw selected when both configurations are present; an explicit private-key argument still overrides it for that operation.
 
 ### 1. Sign (personal_sign)
 
@@ -240,47 +200,67 @@ node bin/wallet.js sell-token \
 - Optional: `--slippage <bps>` (default `200` = 2%), `--sellsman 0x...`, `--rpc-url <url>`, `--api-url <url>`.
 - **`--tagclaw-api-key <apiKey>`** (or **`TAGCLAW_API_KEY`**): **required** for **version 8** tokens — same agent trade signature flow as buy; missing key means the sell cannot be submitted.
 
-## community creation
+## BSC v14 main flow
 
-Use `create-community` when the agent needs to create a new TagClaw community(tick) on chain.
+The wallet supports Pump14 community creation, curve trading, and listed native-BNB/token trading through PancakeSwap Infinity V4. New communities default to **version 14**. Existing local-key and ClawWallet signers use the same commands. The existing v1–v8 paths remain; v9–v13 trading is not implemented and fails explicitly rather than guessing a route.
 
-Recommended sequence:
-
-1. Run `create-community --quote-only` first.
-2. Check the returned fee fields and confirm the wallet can still retain at least `0.0003 BNB` after fees and gas.
-3. Run `create-community` without `--quote-only`.
-4. Use the returned `createHash`, `token`, `nutboxCommunity`, and `nutboxSocialPool` in the later TagClaw API sync step.
-
-### Quote current create cost
+For v14, `price-token`, `buy-token`, and `sell-token` read the token's chain state instead of trusting the API's cached listing status. During `listingPending`, wait for listing to finish. Curve buys use the current on-chain buy fees and remaining curve supply; listed trades use CLQuoter and Universal Router. A price is a spot price, not a guaranteed execution quote.
 
 ```bash
-node bin/wallet.js create-community --tick MYCOIN --quote-only
+node bin/wallet.js price-token --tick MYCOIN
+node bin/wallet.js buy-token --tick MYCOIN --eth-amount 1000000000000000 --slippage 200 --quote-only
+node bin/wallet.js sell-token --tick MYCOIN --amount 1000000000000000000 --slippage 200 --quote-only
 ```
 
-### Send the create transaction
+Remove `--quote-only` to submit a trade. v14 trade quotes do not send transactions or approvals; they still use the configured wallet and RPC. `--quote-only` on legacy trades fails explicitly. v14 accepts `--slippage 0..5000` bps (default 200); zero retains a minimum-output check. Unlike unlisted v8, v14 does not request an agent trade signature. Listed sells approve the exact input amount to Permit2 and the Universal Router if needed, then obtain a fresh quote before swapping. The result includes `approveHashes`, `expectedAmount`/`expectedReceive`, and `amountOutMin`. Approval transactions consume BNB gas.
+
+## Community creation (v14 default)
+
+Create an index configuration JSON file, for example `index.json`. Choose the assets, weights, fee shares, and ownership policy for the intended community; these are creation parameters, not inferred defaults. This example uses BSC BTCB and ETH; the wallet checks current on-chain constituent approval before proceeding.
+
+```json
+{
+  "name": "My Community Index",
+  "symbol": "MYINDEX",
+  "constituentAssets": [
+    "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+    "0x2170Ed0880ac9A755fd29B2688956BD959F933F8"
+  ],
+  "targetWeights": [5000, 5000],
+  "basketFeeBps": 100,
+  "creatorShareBps": 0,
+  "retainCommunityOwnership": true
+}
+```
+
+Requirements: 1–4 distinct approved nonzero assets, positive weights totaling 10000, name up to 64 UTF-8 bytes, symbol up to 16 bytes, basket fee 100–300 bps, creator share 0–3000 bps of the distributable fee share, and an explicit ownership boolean. `true` retains community ownership; `false` renounces it. The selected assets can be discovered through `GET /pump/v14/creation/<creator-address>` on the current BSC API; on-chain approval remains authoritative.
 
 ```bash
-node bin/wallet.js create-community --tick MYCOIN
+# Preview fees and simulate gas without broadcasting.
+node bin/wallet.js create-community --tick MYCOIN --index-config index.json --quote-only
+
+# Use the salt from the quote to retain the same predicted token address.
+node bin/wallet.js create-community --tick MYCOIN --index-config index.json --salt 0x<salt-from-quote>
 ```
 
-Optional:
+Optional parameters:
 
-- `--salt 0x<32-byte-hex>` to override the default chain-derived salt when you have a specific reason to do so
+- `--version 14` (default); `--version 8` retains the legacy creation flow without index configuration.
+- `--initial-buy <wei>` adds an initial BNB purchase to creation (default 0).
+- `--trade-reward-ratio <bps>` creates the optional trade mining pool (default 0, range 0–8000, also constrained by current factory approval and maximum).
+- `--salt 0x<32-byte-hex>` reuses a quote's salt. Otherwise the wallet searches locally for an unused CREATE2 address ending in `3333` using the deployed v14 template.
 
-The JSON output includes:
+The quote includes `version`, `salt`, `predictedToken`, `indexConfig`, `optionalPools`, fees, `settingsCount`, `transactionValue`, `estimatedGasReserve`, `minimumRequiredBalance`, and `canCreate`. Settings fees are charged for **each constituent pool plus each optional pool**. Total value includes the initial buy. The wallet reserves gas plus at least **0.001 BNB** remaining. If gas simulation fails, a quote returns `canCreate: false` with `simulationError`; execution fails before broadcasting. Keep the same configuration and optional parameters when executing the quote; fees and balance are rechecked.
 
-- `lastSaltIndex`
-- `nextSaltIndex`
-- `createFee`
-- `ipshareCreateFee`
-- `nutboxCreateCommunityFee`
-- `nutboxSettingsFee`
-- `totalRequiredFee`
-- `hash`
-- `createHash`
-- `token`
-- `nutboxCommunity`
-- `nutboxSocialPool`
+Successful creation returns `createHash`, `token`, `nutboxCommunity`, `stakingPools`, and `optionalPoolAddresses`. v14 does **not** return a fixed `nutboxSocialPool`, `lastSaltIndex`, or `nextSaltIndex`.
+
+The wallet creates on-chain only. Register metadata separately through the current BSC API's `POST /pump/v14/register`, with `chainId: 56`, `version: 14`, `createHash`, `tick`, `token`, `logoUrl`, and optional description/social fields. The API verifies the receipt. Require a successful `c: 0` response with `d`; on temporary registration failure, persist and retry the **same hash**, never recreate the token. The older `POST /tagclaw/community/create` flow remains for v8. If the deployed API has no v14 registration endpoint, preserve the confirmed on-chain result for later registration.
+
+Legacy creation:
+
+```bash
+node bin/wallet.js create-community --version 8 --tick OLDCOIN --quote-only
+```
 
 ## Nutbox guide for agents
 
@@ -486,9 +466,9 @@ node bin/wallet.js ipshare-claim \
   --subject 0x<subject-address>
 ```
 
-## Restart
+## Restart (Claw Wallet only)
 
-The Clay sandbox may stop running. If a task fails or you suspect the sandbox is down, **do not** blindly restart.
+Local wallets do not require a sandbox. The Clay sandbox may stop running. If a task fails or you suspect the sandbox is down, **do not** blindly restart.
 
 1. Read **`.env.clay`** (written when the sandbox starts) and find **`CLAY_SANDBOX_URL`**. That value is the sandbox base URL (for example `http://127.0.0.1:9000`). **`LISTEN_ADDR`** in the same file describes the listen address and should align with that URL.
 2. **Check** whether the sandbox is actually running — for example try an HTTP request to `CLAY_SANDBOX_URL` with `curl` (connection refused, timeouts, or clear “not listening” errors mean it is not running).

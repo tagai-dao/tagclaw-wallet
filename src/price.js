@@ -2,6 +2,8 @@
  * 代币价格查询：bonding curve、DEX pair、CL pool、BNB/USD
  */
 import { ethers } from 'ethers'
+import { evm } from './evm.js'
+import { getV14Price, readV14State, quoteV14Curve } from './v14.js'
 import {
   UNISWAP_ROUTER_ABI,
   FACTORY_ABI,
@@ -66,6 +68,7 @@ async function getSellAmountUseToken(token, tokenAmount, provider) {
 // ─── Bonding Curve 报价 ───────────────────────────────
 
 async function getUnlistedBuyAmount(token, version, ethAmount, provider) {
+  if (Number(version) === 14) return quoteV14Curve(token, provider, await readV14State(token, provider), true, ethAmount)
   const pumpAddress = PUMP_CONTRACTS[Number(version)]
   if (!pumpAddress) {
     throwWalletError('INVALID_VERSION', `unsupported version=${version}`)
@@ -78,6 +81,7 @@ async function getUnlistedBuyAmount(token, version, ethAmount, provider) {
 }
 
 async function getUnlistedSellAmount(token, version, tokenAmount, provider) {
+  if (Number(version) === 14) return quoteV14Curve(token, provider, await readV14State(token, provider), false, tokenAmount)
   const pumpAddress = PUMP_CONTRACTS[Number(version)]
   if (!pumpAddress) {
     throwWalletError('INVALID_VERSION', `unsupported version=${version}`)
@@ -264,6 +268,15 @@ async function getTokenPrice(params) {
   }
   if (!Number.isInteger(version) || version <= 0) {
     throwWalletError('INVALID_TOKEN_INFO', 'invalid version from API')
+  }
+
+  if (version === 14 && !isImport) {
+    const [bnbPriceUsd, state] = await Promise.all([
+      getBnbPriceUsd(resolveRequestConfig(requestConfig).apiUrl),
+      getV14Price(token, evm.provider(rpcUrl))
+    ])
+    return { tick: normalizedTick, token, version, listed: state.listed, isImport: false,
+      pair: state.poolId, bnbPriceUsd, tokenPriceInBnb: state.price, tokenPriceUsd: state.price * bnbPriceUsd }
   }
 
   const [bnbPriceUsd, tokenPriceInBnb] = await Promise.all([

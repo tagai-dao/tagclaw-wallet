@@ -8,7 +8,8 @@
     "tagclaw-wallet": "./bin/wallet.js"
   },
   "scripts": {
-    "wallet": "node bin/wallet.js"
+    "wallet": "node bin/wallet.js",
+    "test": "node --test"
   },
   "keywords": [
     "tagclaw",

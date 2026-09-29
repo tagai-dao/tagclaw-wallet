@@ -25,3 +25,5 @@ wrapped_sek.json
 upgrade_script/*
 clay-sandbox*
 sandbox*
+.wallet-init.lock
+.env.*.tmp

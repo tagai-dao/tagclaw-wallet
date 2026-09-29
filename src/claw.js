@@ -9,7 +9,8 @@ import { ClawEthersSigner } from '@claw_wallet_sdk/claw_wallet/ethers'
 import { ClawSandboxClient } from '@claw_wallet_sdk/claw_wallet'
 import { DEFAULT_BNB_RPC, RegisterSteemMessage } from './constants.js'
 import { WALLET_ROOT, mergeTagclawWalletEnv } from './config.js'
-import { brainKeyFromSecretHex, steemKeysFromBrainPass } from './steem.js'
+import { brainKeyFromSecretHex, steemKeysFromBrainPass, generateSteemKeys } from './steem.js'
+import { getLocalPrivateKey, getWalletBackend } from './local.js'
 
 // ─── Claw 配置加载 ───────────────────────────────────
 
@@ -32,7 +33,7 @@ function loadClawConfig() {
 function assertClawConfig(cfg) {
   if (!cfg.sandboxUrl || !cfg.uid) {
     throw new Error(
-      'Claw wallet: set CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid). See README Installation: download Claw-Wallet-Skill scripts into this folder, run bash install.sh, then check .env.clay.'
+      'Claw wallet: restore CLAY_SANDBOX_URL, CLAY_AGENT_TOKEN (or AGENT_TOKEN), and CLAY_UID (or identity.json uid) from the existing installation. See README Existing Claw Wallet accounts.'
     )
   }
 }
@@ -112,15 +113,16 @@ async function getClawEthersSigner(rpcUrl = DEFAULT_BNB_RPC) {
 }
 
 /**
- * 统一 signer 解析：传入 privateKey 时走本地 Wallet，否则走 Claw 沙箱
+ * 统一 signer 解析：显式私钥 > 已配置的钱包（本地 .env / Claw 沙箱）
  * @param {string} [privateKey]
  * @param {string} [rpcUrl]
  * @returns {Promise<import('ethers').Wallet | ClawEthersSigner>}
  */
 async function resolveWriteSigner(privateKey, rpcUrl = DEFAULT_BNB_RPC) {
-  if (privateKey && String(privateKey).trim().startsWith('0x')) {
+  const localKey = getLocalPrivateKey(privateKey)
+  if (localKey) {
     const provider = new ethers.JsonRpcProvider(rpcUrl)
-    return new ethers.Wallet(privateKey.trim(), provider)
+    return new ethers.Wallet(localKey, provider)
   }
   return getClawEthersSigner(rpcUrl)
 }
@@ -129,13 +131,14 @@ async function resolveWriteSigner(privateKey, rpcUrl = DEFAULT_BNB_RPC) {
 
 /**
  * Sign a message with EVM private key (personal_sign / eth_sign style)
- * @param {string} [privateKey] - 若省略或空串则走 Claw 沙箱签名
+ * @param {string} [privateKey] - 省略时使用已配置的本地私钥或 Claw 钱包
  * @param {string} message - plain UTF-8 message
  * @returns {Promise<string>} hex signature string (0x-prefixed)
  */
 async function signMessage(privateKey, message) {
-  if (privateKey && String(privateKey).trim().startsWith('0x')) {
-    const wallet = new ethers.Wallet(privateKey.trim())
+  const localKey = getLocalPrivateKey(privateKey)
+  if (localKey) {
+    const wallet = new ethers.Wallet(localKey)
     return wallet.signMessage(message)
   }
   const signer = await getClawEthersSigner()
@@ -177,13 +180,17 @@ async function bindClawWallet(messageHashHex) {
   return client.bindWallet({ message_hash_hex })
 }
 
-/** 拉取 Claw 地址 + 派生 Steem 并写入 .env */
+/** 同步已配置钱包的地址和 Steem 密钥，保持原有派生算法。 */
 async function syncTagclawWalletEnv(opts = {}) {
   const rpcUrl = opts.rpcUrl || DEFAULT_BNB_RPC
-  const steemKeys = opts.steemKeys || (await generateSteemKeysFromClaw({ rpcUrl }))
-  const address = await getClawWalletAddress()
-  const envPath = mergeTagclawWalletEnv({ address, steemKeys })
-  return { address, steemKeys, envPath }
+  const backend = getWalletBackend(opts.privateKey)
+  const privateKey = getLocalPrivateKey(opts.privateKey)
+  const steemKeys = opts.steemKeys || (privateKey
+    ? generateSteemKeys(privateKey)
+    : await generateSteemKeysFromClaw({ rpcUrl }))
+  const address = privateKey ? new ethers.Wallet(privateKey).address : await getClawWalletAddress()
+  const envPath = mergeTagclawWalletEnv({ address, steemKeys, privateKey, backend })
+  return { address, steemKeys, envPath, backend }
 }
 
 export {

@@ -4,6 +4,8 @@
  */
 import { configure, mergeTagclawWalletEnv } from './config.js'
 import { generateSteemKeys } from './steem.js'
+import { createWallet, getLocalPrivateKey } from './local.js'
+import { initWallet, getWalletAddress } from './wallet.js'
 import {
   resolveWriteSigner,
   signMessage,
@@ -56,6 +58,10 @@ import {
 import { DEFAULT_BNB_RPC, RegisterSteemMessage } from './constants.js'
 
 export {
+  createWallet,
+  initWallet,
+  getWalletAddress,
+  getLocalPrivateKey,
   configure,
   RegisterSteemMessage,
   generateSteemKeys,
