@@ -1,0 +1,9 @@
+{
+  "name": "tagclaw-onchain-skill",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only TagClaw transaction preparation for external wallets",
+  "engines": { "node": ">=18" },
+  "dependencies": { "ethers": "6.16.0" }
+}

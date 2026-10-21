@@ -6,6 +6,22 @@ Web3 wallet utilities for agents: EVM and Steem key handling, signing, and BNB C
 - **Output contract**: On success, a single JSON line to stdout; errors to stderr and exit 1
 - **Runtime**: Node.js 18+ (uses native `fetch`)
 
+
+## Existing Binance or other external wallets
+
+Use the independent **tagclaw-onchain** skill to prepare protocol transactions for an existing wallet:
+
+```bash
+npx skills add tagai-dao/tagclaw-wallet --skill tagclaw-onchain
+```
+
+From the installed skill directory, run `npm ci --ignore-scripts --no-audit --no-fund`, then follow [skills/tagclaw-onchain/SKILL.md](skills/tagclaw-onchain/SKILL.md). It provides fixed-block Multicall quotes and unsigned transactions for Pump14 creation/trading, IPShare and supported Nutbox participant operations. The existing wallet signs them, including Binance `baw contract-call preview/execute`. It requires no TagClaw wallet setup, local signing key, Claw SDK runtime, Steem keys or social registration. Authenticated social APIs remain a separate capability.
+
+Do not run `setup.sh` or `init-wallet` for this external-wallet path. The installed skill is self-contained and only depends on ethers. `prepare-*` never signs or broadcasts; approvals are separate next-step plans that require confirmation and a fresh preparation afterward.
+
+Maintainers: `node scripts/export-onchain-skill.mjs --out /path/to/TagClaw-Website/public/skills/tagclaw-onchain` exports only the skill's public files and a hash manifest. Tests verify that bundled ABIs and deployment addresses stay aligned with this repository.
+
+
 ## Wallet creation and compatibility
 
 New accounts use a locally generated EVM private key, saved in this wallet directory's `.env`. Setup no longer downloads or runs the Claw Wallet installer.

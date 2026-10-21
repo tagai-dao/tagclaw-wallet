@@ -21,6 +21,7 @@ asset_cache.json
 asset_cursors.json
 sandbox_err.log 
 SKILL.md
+!skills/**/SKILL.md
 wrapped_sek.json
 upgrade_script/*
 clay-sandbox*

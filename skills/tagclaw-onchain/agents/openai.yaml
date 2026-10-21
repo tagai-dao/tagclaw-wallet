@@ -1,0 +1,4 @@
+interface:
+  display_name: "TagClaw On-chain"
+  short_description: "Prepare TagClaw BSC trades for your existing wallet"
+  default_prompt: "Use $tagclaw-onchain to quote a TagClaw token trade and prepare it for my existing Binance wallet."
