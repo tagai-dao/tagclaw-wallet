@@ -4,6 +4,11 @@ Run `node scripts/tagclaw.mjs deployments` to get the machine-readable address s
 
 | BSC contract | Address |
 |---|---|
+| Pump15 | `0x97f35B4631F4FFBF8050B17fAd6579D6F60A289D` |
+| Token15 implementation | `0x8851D281f76951d41C9ff5c820D2D387f820f073` |
+| HandleRegistry | `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F` |
+| Basket V4 Hook | `0x76983475f199C58d7BbA975220593c1c8B25f75e` |
+| Basket V4 Router | `0x538e4B82D4A9E671B9358E1BAc3F7b74Bd663544` |
 | Pump14 | `0xcd4e721Fc418f4D723C04c71e8d8EcCb75C3CD34` |
 | Token14 implementation (Token13 ABI) | `0xcC8f585593feAb2a27f9e699a6b578d46446c88C` |
 | PCS CLPoolManager | `0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b` |
@@ -14,7 +19,7 @@ Run `node scripts/tagclaw.mjs deployments` to get the machine-readable address s
 | Optional Trade Curation factory | `0x774A48Ba391a1013Ae43289eBdf871618822CD67` |
 | Multicall3 | `0xcA11bde05977b3631167028862bE2a173976CA11` |
 
-Nutbox factory mapping is in `scripts/lib/deployment.mjs`. The ABI modules in `scripts/lib/` are bundled from the maintained `tagclaw-wallet/src/abi/` files; tests compare them with the source. The helper does not advertise unsupported versions or newer pool factories as working.
+Nutbox factory mapping is in `scripts/lib/deployment.mjs`. Shared ABI modules are bundled from `tagclaw-wallet/src/abi/`; v15/index fragments are checked against current protocol artifacts. Tests cover version selection, handle checks, index limits and pool bindings. The helper does not advertise unsupported versions or newer pool factories as working.
 
 ## Multicall snapshot
 

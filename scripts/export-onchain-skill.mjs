@@ -22,5 +22,5 @@ function copy(relative) {
   }
 }
 for (const name of ['SKILL.md', 'package.json', 'package-lock.json', 'agents', 'references', 'scripts']) copy(name)
-fs.writeFileSync(path.join(target, 'manifest.json'), JSON.stringify({ skill: 'tagclaw-onchain', version: '1.0.0', files }, null, 2) + '\n')
+fs.writeFileSync(path.join(target, 'manifest.json'), JSON.stringify({ skill: 'tagclaw-onchain', version: JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8')).version, files }, null, 2) + '\n')
 console.log(JSON.stringify({ destination: target, files: files.length }))

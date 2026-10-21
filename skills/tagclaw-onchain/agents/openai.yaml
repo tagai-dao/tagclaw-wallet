@@ -1,4 +1,4 @@
 interface:
   display_name: "TagClaw On-chain"
-  short_description: "Prepare TagClaw BSC trades for your existing wallet"
+  short_description: "Create v15 tokens, trade and use Nutbox and indexes"
   default_prompt: "Use $tagclaw-onchain to quote a TagClaw token trade and prepare it for my existing Binance wallet."

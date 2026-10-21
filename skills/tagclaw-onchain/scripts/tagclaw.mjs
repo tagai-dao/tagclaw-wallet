@@ -3,11 +3,12 @@
 import fs from 'node:fs'
 import { ethers } from 'ethers'
 import { Snapshot } from './lib/snapshot.mjs'
-import { trade, price, ipshare, nutbox } from './lib/prepare.mjs'
+import { trade, price, ipshare, nutbox, tokenInfo, tokenBalance } from './lib/prepare.mjs'
+import { indexInfo, prepareIndex, miningPools } from './lib/index.mjs'
 import { create, receipt } from './lib/creation.mjs'
 import * as deployment from './lib/deployment.mjs'
 
-const commands = ['deployments', 'price', 'prepare-trade', 'prepare-create', 'ipshare-info', 'prepare-ipshare', 'pool-info', 'prepare-pool', 'receipt']
+const commands = ['deployments', 'price', 'token-info', 'token-balance', 'index-info', 'prepare-index', 'mining-pools', 'prepare-trade', 'prepare-create', 'ipshare-info', 'prepare-ipshare', 'pool-info', 'prepare-pool', 'receipt']
 const json = value => JSON.stringify(value, (_, value) => typeof value === 'bigint' ? String(value) : value)
 async function main() {
   const [command, ...args] = process.argv.slice(2)
@@ -32,6 +33,11 @@ async function main() {
       else {
         const snapshot = await Snapshot.open(provider)
         switch (command) {
+          case 'index-info': output = await indexInfo(snapshot, input); break
+          case 'prepare-index': output = await prepareIndex(snapshot, input); break
+          case 'mining-pools': output = await miningPools(snapshot, input); break
+          case 'token-info': output = await tokenInfo(snapshot, input); break
+          case 'token-balance': output = await tokenBalance(snapshot, input); break
           case 'price': output = await price(snapshot, input); break
           case 'prepare-trade': output = await trade(snapshot, input); break
           case 'prepare-create': output = await create(snapshot, input); break

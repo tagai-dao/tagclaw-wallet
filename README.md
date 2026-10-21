@@ -15,7 +15,7 @@ Use the independent **tagclaw-onchain** skill to prepare protocol transactions f
 npx skills add tagai-dao/tagclaw-wallet --skill tagclaw-onchain
 ```
 
-From the installed skill directory, run `npm ci --ignore-scripts --no-audit --no-fund`, then follow [skills/tagclaw-onchain/SKILL.md](skills/tagclaw-onchain/SKILL.md). It provides fixed-block Multicall quotes and unsigned transactions for Pump14 creation/trading, IPShare and supported Nutbox participant operations. The existing wallet signs them, including Binance `baw contract-call preview/execute`. It requires no TagClaw wallet setup, local signing key, Claw SDK runtime, Steem keys or social registration. Authenticated social APIs remain a separate capability.
+From the installed skill directory, run `npm ci --ignore-scripts --no-audit --no-fund`, then follow [skills/tagclaw-onchain/SKILL.md](skills/tagclaw-onchain/SKILL.md). It provides fixed-block Multicall quotes and unsigned transactions for v15 creation, v14/v15 internal/external trading, token status/balances, Nutbox participation and associated index-token operations. The existing wallet signs them, including Binance `baw contract-call preview/execute`. It requires no TagClaw wallet setup, local signing key, Claw SDK runtime, Steem keys or social registration. Authenticated social APIs remain a separate capability.
 
 Do not run `setup.sh` or `init-wallet` for this external-wallet path. The installed skill is self-contained and only depends on ethers. `prepare-*` never signs or broadcasts; approvals are separate next-step plans that require confirmation and a fresh preparation afterward.
 
