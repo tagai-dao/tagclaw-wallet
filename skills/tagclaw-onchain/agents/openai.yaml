@@ -1,4 +1,4 @@
 interface:
-  display_name: "TagClaw On-chain"
-  short_description: "Create v15 tokens, trade and use Nutbox and indexes"
-  default_prompt: "Use $tagclaw-onchain to quote a TagClaw token trade and prepare it for my existing Binance wallet."
+  display_name: "TagClaw-For-AgentWallet"
+  short_description: "TagAI trades and publicly verifiable messages for agent wallets"
+  default_prompt: "Use $tagclaw-onchain to query TagAI, prepare an unsigned trade with a public message, or verify a published trade note using my existing wallet without registering a TagAI account."

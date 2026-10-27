@@ -48,7 +48,10 @@ export class Snapshot {
     if (rows.length !== input.length) throw new Error('MULTICALL_INCOMPLETE')
     const decoded = rows.map((row, index) => {
       const c = input[index]
-      if (!row.success || row.returnData === '0x') throw new Error(`MULTICALL_SUBCALL_FAILED: ${c.target} ${c.method} at block ${this.block.number}`)
+      if (!row.success || row.returnData === '0x') {
+        if (c.optional === true) return null
+        throw new Error(`MULTICALL_SUBCALL_FAILED: ${c.target} ${c.method} at block ${this.block.number}`)
+      }
       try {
         const values = c.iface.decodeFunctionResult(c.method, row.returnData)
         return values.length === 1 ? values[0] : values

@@ -4,6 +4,8 @@ Run `node scripts/tagclaw.mjs deployments` to get the machine-readable address s
 
 | BSC contract | Address |
 |---|---|
+| Current token-issuance factory | `0xee8D16f44c89B5F858e223Ab77c6091E184AaDf8` |
+| Current token implementation | `0x2eD2ac896392f2C1a4585da277c2095E2C975583` |
 | Pump15 | `0x97f35B4631F4FFBF8050B17fAd6579D6F60A289D` |
 | Token15 implementation | `0x8851D281f76951d41C9ff5c820D2D387f820f073` |
 | HandleRegistry | `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F` |
@@ -16,10 +18,16 @@ Run `node scripts/tagclaw.mjs deployments` to get the machine-readable address s
 | PCS Universal Router | `0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB` |
 | Permit2 | `0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768` |
 | IPShare | `0x95450AaD4Cc195e03BB4791B7f6f04aC6D9BA922` |
+| Pump13 (existing tokens) | `0x2c2f4e8D85c02a065f109c74d9b27186AE65Adfa` |
+| Pancake V2 factory | `0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73` |
+| Pancake V2 router | `0x10ED43C718714eb63d5aA57B78B54704E256024E` |
+| Legacy TagAI swap wrapper | `0x4cA57c64DFe1cF1be977093C75f9d9cdd1DD2E10` |
+| Legacy import V2 wrapper | `0x72D353c0469C10F6B769F13b67EEdB2E1F26FB01` |
+| Current imported-token multi-DEX wrapper | `0xDfFc699FB095a693708E3c15e6F0a224cbbCc98F` |
 | Optional Trade Curation factory | `0x774A48Ba391a1013Ae43289eBdf871618822CD67` |
 | Multicall3 | `0xcA11bde05977b3631167028862bE2a173976CA11` |
 
-Nutbox factory mapping is in `scripts/lib/deployment.mjs`. Shared ABI modules are bundled from `tagclaw-wallet/src/abi/`; v15/index fragments are checked against current protocol artifacts. Tests cover version selection, handle checks, index limits and pool bindings. The helper does not advertise unsupported versions or newer pool factories as working.
+Nutbox factory mapping and historical Pump1–Pump9/Pump11 addresses are in `scripts/lib/deployment.mjs`. Shared ABI modules are bundled from `tagclaw-wallet/src/abi/`; index-token and imported-swap fragments are checked against the maintained UI/API protocol ABIs. Tests cover version selection, handle checks, index limits and pool bindings. Unrecognized versions and newer Nutbox factories are explicit errors rather than assumed ABI compatibility.
 
 ## Multicall snapshot
 

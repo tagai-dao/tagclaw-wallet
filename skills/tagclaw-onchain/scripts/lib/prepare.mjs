@@ -2,7 +2,7 @@ import { ethers } from 'ethers'
 import * as D from './deployment.mjs'
 import { call, MULTICALL_ABI } from './snapshot.mjs'
 import { PUMP14_ABI, TOKEN14_ABI, PCS_MANAGER_ABI, PCS_QUOTER_ABI, PCS_ROUTER_ABI, PERMIT2_ABI, POOL_KEY_TYPE } from './v14-abi.mjs'
-import { TOKEN_INDEX_ABI, PUMP_EXTRA_ABI, HANDLE_ABI, COMMUNITY_INDEX_ABI } from './index-abi.mjs'
+import { TOKEN_INDEX_ABI, PUMP_EXTRA_ABI, HANDLE_ABI, CURVE_LIMIT_ABI, COMMUNITY_INDEX_ABI } from './index-abi.mjs'
 import { IPSHARE_ABI } from './ipshare-abi.mjs'
 import { ERC20_BALANCE_ABI, TOKEN_ALLOWANCE_ABI } from './erc20-abi.mjs'
 import { NUTBOX_POOL_ABI, NUTBOX_COMMUNITY_ABI, NUTBOX_COMMITTEE_ABI, ERC20_STAKING_POOL_ABI, ERC20_LOCKING_POOL_ABI, ERC1155_STAKING_POOL_ABI, ERC1155_APPROVAL_ABI, SOCIAL_CURATION_POOL_ABI } from './nutbox-abi.mjs'
@@ -28,7 +28,7 @@ export function slippage(value = 200) {
 export function plan(snapshot, from, action, to, abi, method, args, value = 0n, details = {}) {
   const data = new ethers.Interface(abi).encodeFunctionData(method, args)
   return {
-    ...snapshot.metadata(), kind: 'unsigned-transaction-plan', action, expiresAt: snapshot.block.timestamp + 300,
+    ...snapshot.metadata(), schemaVersion: 1, kind: 'unsigned-transaction-plan', action, expiresAt: snapshot.block.timestamp + 300,
     ...details,
     transactions: [{ chainId: D.CHAIN_ID, from, to: ethers.getAddress(to), value: String(value), data, inputData: data, method }]
   }
@@ -40,14 +40,14 @@ export async function tokenState(snapshot, token) {
   const profiles = Object.values(D.PROFILES)
   const matches = await snapshot.read(profiles.map(p => call(p.pump, PUMP14_ABI, 'createdTokens', [token])))
   const found = profiles.filter((_, i) => matches[i])
-  if (found.length !== 1) throw new Error('UNSUPPORTED_TOKEN_DEPLOYMENT: require a native Pump14 or Pump15 token')
+  if (found.length !== 1) throw new Error('UNSUPPORTED_TOKEN_DEPLOYMENT: use resolve-token for legacy or imported tokens')
   const profile = found[0]
   const [version, implementation, listed, pending, supply, fees, poolId] = await snapshot.read([
-    call(profile.pump, PUMP14_ABI, 'VERSION'), call(profile.pump, PUMP14_ABI, 'tokenImplementation'),
+    profile.version === 13 ? { ...call(profile.pump, PUMP14_ABI, 'VERSION'), optional: true } : call(profile.pump, PUMP14_ABI, 'VERSION'), call(profile.pump, PUMP14_ABI, 'tokenImplementation'),
     call(token, TOKEN14_ABI, 'listed'), call(token, TOKEN14_ABI, 'listingPending'),
     call(token, TOKEN14_ABI, 'bondingCurveSupply'), call(token, TOKEN14_ABI, 'getBuyFeeRatios'), call(token, TOKEN14_ABI, 'v4PoolId')
   ])
-  if (version !== BigInt(profile.version) || !same(implementation, profile.implementation)) throw new Error('TOKEN_DEPLOYMENT_MISMATCH')
+  if ((version !== null && version !== BigInt(profile.version)) || !same(implementation, profile.implementation)) throw new Error('TOKEN_DEPLOYMENT_MISMATCH')
   if (supply < 0n || supply > CAP) throw new Error('INVALID_CURVE_SUPPLY')
   return { ...profile, listed, pending, supply, fees, poolId }
 }
@@ -62,7 +62,7 @@ export async function tokenInfo(snapshot, input) {
   if (count < 1n || count > 4n) throw new Error('INVALID_COMPONENT_COUNT')
   const components = await snapshot.read(Array.from({length:Number(count)},(_,i)=>call(token,TOKEN_INDEX_ABI,'componentAt',[i])))
   let buyerHandle
-  if (input.from && state.version === 15) [buyerHandle] = await snapshot.read([call(D.HANDLE_REGISTRY,HANDLE_ABI,'handleOf',[address(input.from,'from')])])
+  if (input.from && state.version >= 15) [buyerHandle] = await snapshot.read([call(D.HANDLE_REGISTRY,HANDLE_ABI,'handleOf',[address(input.from,'from')])])
   return { ...snapshot.metadata(), token, ...state, symbol, decimals:Number(decimals), totalSupply,
     market:state.pending?'listing':state.listed?'external':'internal', indexToken:index, nutboxCommunity:community,
     components:components.map(c=>({asset:c.asset,weight:Number(c.weight),pair:c.pair})),
@@ -75,7 +75,7 @@ export async function tokenBalance(snapshot, input) {
   return {...snapshot.metadata(),token,from,symbol,decimals:Number(decimals),raw,formatted:ethers.formatUnits(raw,decimals)}
 }
 
-async function poolKey(snapshot, token, poolId) {
+export async function poolKey(snapshot, token, poolId) {
   if (!ethers.isHexString(poolId, 32) || poolId === ethers.ZeroHash) throw new Error('V4_POOL_UNAVAILABLE')
   const [key] = await snapshot.read([call(D.MANAGER, PCS_MANAGER_ABI, 'poolIdToPoolKey', [poolId])])
   if (!same(key.currency0, ethers.ZeroAddress) || !same(key.currency1, token) || !same(key.poolManager, D.MANAGER) || !same(ethers.keccak256(coder.encode([POOL_KEY_TYPE], [key])), poolId)) throw new Error('V4_INVALID_NATIVE_POOL')
@@ -109,9 +109,9 @@ export async function trade(snapshot, input) {
   const [balance] = await snapshot.read([isBuy ? nativeBalance(from) : call(token, ERC20_BALANCE_ABI, 'balanceOf', [from])])
   requireBalance(balance, amount, isBuy ? 'BNB' : 'TOKEN')
   if (!state.listed) {
-    if (state.version === 15 && isBuy) {
+    if (state.version >= 15 && isBuy) {
       const [handle] = await snapshot.read([call(D.HANDLE_REGISTRY, HANDLE_ABI, 'handleOf', [from])])
-      if (handle.length === 0) throw new Error('V15_HANDLE_NOT_REGISTERED: register a handle in Binance Wallet before an ordinary curve buy')
+      if (handle.length === 0) throw new Error(`V${state.version}_HANDLE_NOT_REGISTERED: this address needs a Binance Wallet handle for an ordinary curve buy; no TagAI account registration is needed`)
     }
     let expected
     if (isBuy) {
@@ -120,6 +120,12 @@ export async function trade(snapshot, input) {
       const net = amount - amount * a / 10000n - amount * b / 10000n
       ;[expected] = await snapshot.read([call(state.pump, PUMP14_ABI, 'getBuyAmountByValue', [state.supply, net])])
       if (expected > CAP - state.supply) expected = CAP - state.supply
+      if (state.version >= 17) {
+        const [bought,limit] = await snapshot.read([
+          call(token,CURVE_LIMIT_ABI,'innerMarketBought',[from]), call(token,CURVE_LIMIT_ABI,'INNER_MARKET_BUY_LIMIT')
+        ])
+        if (limit <= 0n || bought + expected > limit) throw new Error('INNER_MARKET_BUY_LIMIT_EXCEEDED: reduce the buy amount; sales do not reset the cumulative limit')
+      }
     } else {
       if (amount > state.supply) throw new Error('SELL_EXCEEDS_CURVE_SUPPLY')
       ;[expected] = await snapshot.read([call(state.pump, PUMP14_ABI, 'getSellPriceAfterFee', [state.supply, amount])])
@@ -130,8 +136,15 @@ export async function trade(snapshot, input) {
     if (expected <= 0n || minimum <= 0n) throw new Error('ZERO_OUTPUT')
     return plan(snapshot, from, `v${state.version}-curve-${input.side}`, token, TOKEN14_ABI, isBuy ? 'buyToken' : 'sellToken',
       isBuy ? [contractExpected, sellsman, actualBps] : [amount, contractExpected, sellsman, actualBps], isBuy ? amount : 0n,
-      { quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
+      { token, quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
   }
+  return v4Trade(snapshot, input, state)
+}
+
+export async function v4Trade(snapshot, input, state) {
+  const from = address(input.from, 'from'), token = address(input.token, 'token')
+  const isBuy = input.side === 'buy', amount = uint(input.amount, 'amount'), bps = slippage(input.slippageBps)
+  const sellsman = input.sellsman ? address(input.sellsman, 'sellsman') : ethers.ZeroAddress
   if (amount > U128) throw new Error('V4_AMOUNT_OVERFLOW')
   const key = await poolKey(snapshot, token, state.poolId)
   const hook = sellsman === ethers.ZeroAddress ? '0x' : coder.encode(['address'], [sellsman])
@@ -153,11 +166,38 @@ export async function trade(snapshot, input) {
     coder.encode(['address', 'uint128'], [isBuy ? key.currency0 : key.currency1, amount]),
     coder.encode(['address', 'uint128'], [isBuy ? key.currency1 : key.currency0, minimum])]])
   return plan(snapshot, from, `v${state.version}-v4-${input.side}`, D.ROUTER, PCS_ROUTER_ABI, 'execute', ['0x10', [payload], snapshot.block.timestamp + 300], isBuy ? amount : 0n,
-    { poolId: state.poolId, quote, rebuildAfterConfirmation: false })
+    { token: input.token, poolId: state.poolId, quote, rebuildAfterConfirmation: false })
+}
+
+export const IPSHARE_QUOTE_ABI = [
+  'function subjectFeePercent() view returns(uint256)',
+  'function protocolFeePercent() view returns(uint256)',
+  'function getBuyAmountByValue(uint256,uint256) view returns(uint256)',
+  'function getBuyPriceAfterFee(address,uint256) view returns(uint256)'
+]
+
+export async function ipshareQuote(snapshot, input) {
+  const subject = address(input.subject || input.from, 'subject')
+  const [created, supply, subjectFee, protocolFee] = await snapshot.read([
+    call(D.IPSHARE, IPSHARE_ABI, 'ipshareCreated', [subject]), call(D.IPSHARE, IPSHARE_ABI, 'ipshareSupply', [subject]),
+    call(D.IPSHARE, IPSHARE_QUOTE_ABI, 'subjectFeePercent'), call(D.IPSHARE, IPSHARE_QUOTE_ABI, 'protocolFeePercent')
+  ])
+  if (!created) throw new Error('IPSHARE_NOT_CREATED')
+  if (subjectFee + protocolFee >= 10000n) throw new Error('INVALID_IPSHARE_FEES')
+  const buy = input.side === 'buy'
+  if (!buy && input.side !== 'sell') throw new Error('INVALID_SIDE')
+  const amount = uint(buy ? input.value : input.amount, buy ? 'value' : 'amount')
+  if (!buy && amount > supply) throw new Error('SELL_EXCEEDS_IPSHARE_SUPPLY')
+  const [expected] = await snapshot.read([buy
+    ? call(D.IPSHARE, IPSHARE_QUOTE_ABI, 'getBuyAmountByValue', [supply, amount - amount * subjectFee / 10000n - amount * protocolFee / 10000n])
+    : call(D.IPSHARE, IPSHARE_ABI, 'getSellPriceAfterFee', [subject, amount])])
+  const minimum = expected * BigInt(10000 - slippage(input.slippageBps)) / 10000n
+  if (expected <= 0n || minimum <= 0n) throw new Error('ZERO_OUTPUT')
+  return { ...snapshot.metadata(), subject, side: input.side, quote: { amountIn: amount, expectedOut: expected, minimumOut: minimum, slippageBps: slippage(input.slippageBps) } }
 }
 
 export async function ipshare(snapshot, input, prepare = false) {
-  const from = address(input.from, 'from'), subject = address(input.subject || from, 'subject')
+  const from = address(input.from || (!prepare && input.subject), 'from'), subject = address(input.subject || from, 'subject')
   const [created, supply, balance, pending, stake, fee, bnb] = await snapshot.read([
     call(D.IPSHARE, IPSHARE_ABI, 'ipshareCreated', [subject]), call(D.IPSHARE, IPSHARE_ABI, 'ipshareSupply', [subject]),
     call(D.IPSHARE, IPSHARE_ABI, 'ipshareBalance', [subject, from]), call(D.IPSHARE, IPSHARE_ABI, 'getPendingProfits', [subject, from]),
@@ -173,9 +213,10 @@ export async function ipshare(snapshot, input, prepare = false) {
     case 'buy': {
       if (!created) throw new Error('IPSHARE_NOT_CREATED')
       value = uint(input.value, 'value')
-      // The sender-dependent payable buy simulation is left to the wallet preview.
-      const minimum = uint(input.minimumOut, 'minimumOut')
-      method = 'buyShares'; args = [subject, from, minimum]; quote = { minimumOut: String(minimum), quoteType: 'user-supplied-minimum-wallet-preview-required' }; break
+      const quoted = await ipshareQuote(snapshot, { ...input, subject, side: 'buy' })
+      const minimum = input.minimumOut === undefined ? quoted.quote.minimumOut : uint(input.minimumOut, 'minimumOut')
+      if (minimum > quoted.quote.expectedOut) throw new Error('IPSHARE_MINIMUM_ABOVE_QUOTE')
+      method = 'buyShares'; args = [subject, from, minimum]; quote = { ...quoted.quote, minimumOut: minimum }; break
     }
     case 'sell': {
       const amount = uint(input.amount, 'amount'); requireBalance(balance, amount, 'IPSHARE')
@@ -208,7 +249,7 @@ async function getPool(snapshot, input) {
   let kind = Object.keys(D.FACTORIES).find(kind => same(D.FACTORIES[kind], factory))
   let modern = false
   if (!kind) {
-    const factories = await snapshot.read(Object.values(D.PROFILES).map(p=>call(p.pump,PUMP_EXTRA_ABI,'erc20StakingFactory')))
+    const factories = await snapshot.read(Object.values(D.PROFILES).filter(profile => profile.version >= 14).map(p=>call(p.pump,PUMP_EXTRA_ABI,'erc20StakingFactory')))
     if (factories.some(f=>same(f,factory))) { kind='erc20_staking'; modern=true }
   }
   if (!kind) throw new Error('UNSUPPORTED_POOL_FACTORY: do not infer ABI from a pool name')

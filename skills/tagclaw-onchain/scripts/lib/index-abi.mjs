@@ -9,6 +9,7 @@ export const TOKEN_INDEX_ABI = [
 ]
 export const PUMP_EXTRA_ABI = ['function erc20StakingFactory() view returns(address)']
 export const HANDLE_ABI = ['function handleOf(address) view returns(string)']
+export const CURVE_LIMIT_ABI = ['function innerMarketBought(address) view returns(uint256)', 'function INNER_MARKET_BUY_LIMIT() view returns(uint256)']
 export const PERMISSIONS_ABI = ['function operators(address) view returns(bool)', 'function approvedCreatorForwarders(address) view returns(bool)']
 export const BASKET_TOKEN_ABI = [
   'function protocolVersion() view returns(uint32)', 'function registry() view returns(address)',
