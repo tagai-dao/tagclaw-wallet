@@ -30,7 +30,7 @@ export function walletPayload(input, now = Math.floor(Date.now() / 1000)) {
     snapshot: { blockNumber: input.blockNumber, blockHash: input.blockHash, blockTimestamp: input.blockTimestamp, multicall: input.multicall },
     transaction: { chainId: CHAIN_ID, from, to, value, data },
     review: { quote: input.quote ?? null, fees: input.fees ?? null, gasCheck: input.gasCheck ?? null, authorityChange: input.authorityChange ?? null, predictedToken: input.predictedToken ?? null, indexConfig: input.indexConfig ?? null,
-      ...(input.tradeNote ? { publicMessage: {text:input.tradeNote.text,confidence:input.tradeNote.confidence,commitment:input.tradeNote.commitment} } : {}) },
+      ...(input.tradeNote ? { publicMessage: {text:input.tradeNote.text,conf:input.tradeNote.conf,follow:input.tradeNote.follow??null,commitment:input.tradeNote.commitment} } : {}) },
     requiresWalletPreview: true,
     requiresUserAuthorization: true,
     rebuildAfterConfirmation: input.rebuildAfterConfirmation === true,

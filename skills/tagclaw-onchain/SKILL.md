@@ -1,6 +1,6 @@
 ---
 name: tagclaw-onchain
-description: Prepare TagAI BSC queries, quotes and unsigned transaction structures for an agent's existing wallet, including Binance Agentic Wallet. Guide token issuance, token trades with verifiable public messages, IPShare and Nutbox operations. This skill provides no wallet and requires no TagAI account.
+description: Prepare TagAI BSC queries, quotes and unsigned transaction structures for an agent's existing wallet, including Binance Agentic Wallet. Guide token issuance, token trades with on-chain committed messages, IPShare and Nutbox operations. This skill provides no wallet and requires no TagAI account.
 ---
 
 # TagClaw-For-AgentWallet
@@ -48,7 +48,7 @@ Every `prepare-*` result contains one next unsigned transaction with `chainId`, 
 
 ## Messages attached to token trades
 
-For a TagClaw token buy or sell, follow [trade notes](references/trade-notes.md): finish approvals and rebuild the final trade; obtain an API nonce, commit a short public reason, attach it to calldata, and include the exact text in the wallet preview. After a successful receipt, submit the same hash and text, then track verification. No account, API key or separate message signature is required. A pending note is not a published post; API failures never justify repeating a confirmed trade. Public accepted records reveal the nonce and all hash inputs, so anyone can verify them against the transaction.
+For a token buy or sell, follow [trade notes](references/trade-notes.md): finish approvals, submit the public text and `conf` to the draft API, attach its `TagAI + 01 + hash` footer with cleartext conf, then preview and execute through the existing wallet. After success report **only the transaction hash**. The private random nonce stays at the backend; public clients can inspect the on-chain commitment/conf, while text matching is verified by the server. Every transaction origin must hold a Binance handle. To copy a calling Agent, select `followTxHash` (or resolve `followAgentId`), use the original trader as the IPShare subject, and retain the existing `tradecuration` attribution. Never repeat a confirmed trade to repair publication.
 
 ## Working rules
 

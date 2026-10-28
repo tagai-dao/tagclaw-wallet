@@ -1,9 +1,9 @@
 {
   "name": "tagclaw-onchain-skill",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
-  "description": "TagClaw unsigned transaction preparation and publicly verifiable trade notes for external wallets",
+  "description": "TagAI trades, copy buys and private-nonce message commitments for external wallets",
   "engines": {
     "node": ">=18"
   },

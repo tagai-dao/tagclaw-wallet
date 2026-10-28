@@ -39,7 +39,7 @@ Use `wallet-payload` to export the [transaction handoff structure](transactions.
 
 ## 2. Prepare and present one combined confirmation
 
-For a TagClaw token buy/sell with a public reason, follow [trade notes](trade-notes.md) after approvals and before the wallet preview. Include the exact normalized text and optional confidence in that preview. Save the nonce/note alongside the plan; after a successful receipt, report its hash and text and track publication separately from chain success. No new account or API key is involved.
+For a TagClaw token buy/sell with a public reason, follow [trade notes](trade-notes.md) after approvals and before the wallet preview. Include the exact normalized text and optional `conf` in that preview. Save the prepared note alongside the plan; the nonce stays private at the backend. After a successful receipt, report only the transaction hash and track publication separately from chain success. No new account or API key is involved.
 
 Once required decisions are complete, prepare the plan and obtain the wallet preview. The user does not need to approve the same parameters once before preparation and again after preview. Combine the plan's intent/quote and wallet security result into **one final confirmation for that concrete transaction**.
 

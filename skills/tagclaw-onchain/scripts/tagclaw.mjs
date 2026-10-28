@@ -3,14 +3,14 @@
 import fs from 'node:fs'
 import { ethers } from 'ethers'
 import { Snapshot } from './lib/snapshot.mjs'
-import { trade, price, ipshare, ipshareQuote, nutbox, tokenInfo, tokenBalance, tokenState } from './lib/prepare.mjs'
+import { trade, price, ipshare, ipshareQuote, nutbox, tokenInfo, tokenBalance, tokenState, agentTradeIdentity } from './lib/prepare.mjs'
 import { indexInfo, prepareIndex, miningPools } from './lib/index.mjs'
 import { create, creationOptions, receipt } from './lib/creation.mjs'
 import * as deployment from './lib/deployment.mjs'
 import { PublicApi, API_RESOURCES, resolveToken } from './lib/api.mjs'
 import { legacyState, legacyTrade, legacyPrice } from './lib/legacy.mjs'
 import { walletPayload } from './lib/wallet-payload.mjs'
-import { TradeNotesApi,attachNote,verifyPublishedNote } from './lib/trade-notes.mjs'
+import { TradeNotesApi,attachNote,attachFollow,verifyPublishedNote } from './lib/trade-notes.mjs'
 
 const commands = ['prepare-note','attach-note','submit-note','note-status','verify-note','capabilities', 'wallet-payload', 'api', 'resolve-token', 'token-search', 'creation-options', 'deployments', 'price', 'token-info', 'token-balance', 'index-info', 'prepare-index', 'mining-pools', 'prepare-trade', 'prepare-create', 'ipshare-info', 'ipshare-quote', 'prepare-ipshare', 'pool-info', 'prepare-pool', 'receipt']
 const json = value => JSON.stringify(value, (_, value) => typeof value === 'bigint' ? String(value) : value)
@@ -52,6 +52,7 @@ async function main() {
         const snapshot = await Snapshot.open(provider)
         if (command === 'resolve-token') output = await resolveToken(input, api, snapshot)
         else {
+        if(command==='prepare-trade')await agentTradeIdentity(snapshot,input)
         let legacy
         const tokenCommands = ['token-info', 'price', 'prepare-trade', 'token-balance', 'mining-pools', 'index-info', 'prepare-index']
         if (tokenCommands.includes(command)) {
@@ -67,6 +68,13 @@ async function main() {
               legacy = await legacyState(snapshot, resolved.data)
             }
           }
+        }
+        let follow
+        if(command==='prepare-trade'&&(input.followTxHash||input.followAgentId)){
+          if(input.side!=='buy')throw new Error('FOLLOW_REQUIRES_BUY')
+          follow=await notes.follow(input)
+          if(input.sellsman&&input.sellsman.toLowerCase()!==follow.ipshareSubject.toLowerCase())throw new Error('FOLLOW_REFERRAL_CONFLICT')
+          input={...input,sellsman:follow.ipshareSubject}
         }
         if (legacy && command === 'token-info') { const { metadata, ...state } = legacy; output = state }
         else if (legacy && command === 'price') output = await legacyPrice(snapshot, input, legacy)
@@ -87,6 +95,10 @@ async function main() {
           case 'prepare-ipshare': output = await ipshare(snapshot, input, true); break
           case 'pool-info': output = await nutbox(snapshot, input); break
           case 'prepare-pool': output = await nutbox(snapshot, input, true); break
+        }
+        if(follow){
+          if(!output.rebuildAfterConfirmation)follow=await notes.followIntent(input,follow)
+          output=attachFollow(output,follow)
         }
         }
       }

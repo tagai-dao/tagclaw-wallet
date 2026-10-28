@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { ethers } from 'ethers'
 import { Snapshot, MULTICALL_ABI } from '../skills/tagclaw-onchain/scripts/lib/snapshot.mjs'
-import { trade, price, ipshare, ipshareQuote, IPSHARE_QUOTE_ABI, nutbox, tokenInfo, tokenBalance } from '../skills/tagclaw-onchain/scripts/lib/prepare.mjs'
+import { trade, price, ipshare, ipshareQuote, IPSHARE_QUOTE_ABI, nutbox, tokenInfo, tokenBalance, agentTradeIdentity } from '../skills/tagclaw-onchain/scripts/lib/prepare.mjs'
 import { create, creationOptions, receipt, predict } from '../skills/tagclaw-onchain/scripts/lib/creation.mjs'
 import * as D from '../skills/tagclaw-onchain/scripts/lib/deployment.mjs'
 import { PUMP14_ABI, TOKEN14_ABI, PCS_MANAGER_ABI, PCS_QUOTER_ABI, PCS_ROUTER_ABI, PERMIT2_ABI, POOL_KEY_TYPE, CREATE_V14 } from '../src/abi/v14.js'
@@ -508,4 +508,13 @@ test('IPShare buys obtain an after-fee quote via Multicall and enforce a positiv
   assert.equal(new ethers.Interface(IPSHARE_ABI).parseTransaction({data:result.transactions[0].data}).args[2],1960n)
   await assert.rejects(ipshare(snapshot,{from:owner,subject:token,action:'buy',value:'100',minimumOut:'2001'},true),/MINIMUM_ABOVE_QUOTE/)
   assert.equal((await ipshare(snapshot,{subject:token})).subject,token)
+})
+
+test('Agent trade origin handle is checked through fixed-block Multicall for all market types',async()=>{
+ const f=fixture(),snapshot=await f.open()
+ assert.equal((await agentTradeIdentity(snapshot,{from:owner})).handle,'agent.ai')
+ const request=flat(f).find(c=>c.target===D.HANDLE_REGISTRY&&c.method==='handleOf')
+ assert.deepEqual([...request.args],[owner])
+ f.s.handle=''
+ await assert.rejects(agentTradeIdentity(await f.open(),{from:owner}),/BINANCE_HANDLE_REQUIRED/)
 })

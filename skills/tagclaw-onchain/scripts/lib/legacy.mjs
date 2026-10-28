@@ -137,7 +137,7 @@ export async function legacyTrade(snapshot, input, state) {
   const contractExpected = bps === 0 ? (expected * 10000n + 9998n) / 9999n : expected
   const minimum = state.listed ? expected * BigInt(10000 - bps) / 10000n : contractExpected * BigInt(10000 - actualBps) / 10000n
   if (expected <= 0n || minimum <= 0n) throw new Error('ZERO_OUTPUT')
-  const details = { version: state.version, token: state.token, quote: { expectedOut: expected, minimumOut: minimum, amountIn: amount, slippageBps: bps }, rebuildAfterConfirmation: false }
+  const details = { ipshareSubject:sellsman, version: state.version, token: state.token, quote: { expectedOut: expected, minimumOut: minimum, amountIn: amount, slippageBps: bps }, rebuildAfterConfirmation: false }
   if (!state.listed) {
     let abi = TOKEN14_ABI, method = buy ? 'buyToken' : 'sellToken'
     let args = buy ? [contractExpected, sellsman, actualBps] : [amount, contractExpected, sellsman, actualBps]

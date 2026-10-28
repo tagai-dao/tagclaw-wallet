@@ -99,6 +99,13 @@ export async function price(snapshot, input) {
   return { ...snapshot.metadata(), token, listed: state.listed, poolId: state.listed ? state.poolId : null, priceInBnb, quoteType: 'spot-not-execution' }
 }
 
+export async function agentTradeIdentity(snapshot,input) {
+  const from=address(input.from,'from')
+  const [handle]=await snapshot.read([call(D.HANDLE_REGISTRY,HANDLE_ABI,'handleOf',[from])])
+  if(typeof handle!=='string'||!handle||handle.trim()!==handle)throw new Error('BINANCE_HANDLE_REQUIRED: the transaction origin must hold a Binance Agent handle')
+  return {from,handle}
+}
+
 export async function trade(snapshot, input) {
   const from = address(input.from, 'from'), token = address(input.token, 'token')
   if (!['buy', 'sell'].includes(input.side)) throw new Error('INVALID_SIDE')
@@ -136,7 +143,7 @@ export async function trade(snapshot, input) {
     if (expected <= 0n || minimum <= 0n) throw new Error('ZERO_OUTPUT')
     return plan(snapshot, from, `v${state.version}-curve-${input.side}`, token, TOKEN14_ABI, isBuy ? 'buyToken' : 'sellToken',
       isBuy ? [contractExpected, sellsman, actualBps] : [amount, contractExpected, sellsman, actualBps], isBuy ? amount : 0n,
-      { token, quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
+      { token, ipshareSubject:sellsman, quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
   }
   return v4Trade(snapshot, input, state)
 }
@@ -166,7 +173,7 @@ export async function v4Trade(snapshot, input, state) {
     coder.encode(['address', 'uint128'], [isBuy ? key.currency0 : key.currency1, amount]),
     coder.encode(['address', 'uint128'], [isBuy ? key.currency1 : key.currency0, minimum])]])
   return plan(snapshot, from, `v${state.version}-v4-${input.side}`, D.ROUTER, PCS_ROUTER_ABI, 'execute', ['0x10', [payload], snapshot.block.timestamp + 300], isBuy ? amount : 0n,
-    { token: input.token, poolId: state.poolId, quote, rebuildAfterConfirmation: false })
+    { token: input.token, ipshareSubject:sellsman, poolId: state.poolId, quote, rebuildAfterConfirmation: false })
 }
 
 export const IPSHARE_QUOTE_ABI = [

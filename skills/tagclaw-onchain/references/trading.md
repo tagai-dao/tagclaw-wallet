@@ -55,3 +55,5 @@ For wallet preview/execution/order tracking, read [Binance execution](binance.md
 - **Listing pending:** wait for listing finalization and reprepare. Do not use stale API pair metadata.
 - **V2/V3/V4 imports:** retain `isImport`, `version`, `dexVersion` and full `pair` metadata. A V4 bytes32 ID is not a V2 address; an imported token may have a non-BNB quote leg. The current import wrapper quotes the actual route; do not force a direct BNB pair.
 - **API unavailable or unresolved identity:** report the failure. Do not guess an unknown token's protocol version or execute against an API-supplied arbitrary router.
+
+Copy buys accept `followTxHash` or `followAgentId` on `prepare-trade`. The helper resolves an accepted source, pins its canonical trade-curation source ID and passes the original trader wallet as the IPShare subject. Prepare the message with the resolved exact `followTxHash`; do not substitute an unrelated sellsman. See [trade notes](trade-notes.md).
