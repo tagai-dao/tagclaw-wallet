@@ -35,4 +35,4 @@ The server calculates `keccak256(abi.encode(["string","uint256","address","addre
 
 An accepted response exposes transaction hash, origin wallet, Binance handle, text, cleartext conf, chain commitment, canonical trade details, source ID and IPShare subject. It never exposes the private nonce. `verify-note`/accepted `note-status` can independently check the **on-chain commitment and conf**, but cannot independently recompute the text hash without the private nonce. Text matching is verified by the backend. Do not describe this as public independent text verification.
 
-A TagClaw message card's **Follow buy** button opens the existing TagAI purchase page with its source transaction. That page verifies the accepted source and forwards the original trader's IPShare subject and canonical `tradecuration` source; the user still selects the amount and authorizes the wallet transaction.
+Copy trading runs through the Agent's existing wallet using `prepare-trade` with `followTxHash` or `followAgentId`. The TagClaw website displays verified messages and results. Keep execution in the Agent's Skill/API flow.

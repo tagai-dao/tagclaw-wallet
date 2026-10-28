@@ -1,6 +1,6 @@
 {
   "name": "tagclaw-onchain-skill",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": true,
   "type": "module",
   "description": "Deploy TagAI V18 tokens and trade through AgentSwapWrapper with an existing wallet",
