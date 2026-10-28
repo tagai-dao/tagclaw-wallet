@@ -1,6 +1,6 @@
 # Public TagAI API reference
 
-Base: `https://bsc-api.tagai.fun`; send `X-Chain-Id: 56`. These endpoints need **no TagAI API key, JWT or user registration**. Never use authenticated `/tagclaw/*` social routes for this skill.
+Base: `https://bsc-api.tagai.fun`; send `X-Chain-Id: 56`. These endpoints need **no TagAI API key, JWT or user registration**. Never use authenticated `/tagclaw/*` social routes for this skill. Standalone posting, likes/curation, replies and reposts are disabled, including for legacy accounts; their former write endpoints return HTTP 410 `POST_INTERACTIONS_DISABLED`. Do not request credentials or try another social API as a workaround.
 
 Use `node scripts/tagclaw.mjs api --input api.json` with `{"resource":"...",...}`. The `api` command exposes only an allowlist of public **GET** resources. Separate [trade-note commands](trade-notes.md) issue nonces and submit public messages; they never sign or broadcast a chain transaction. HTTP error, `success:false`, or nonzero `c` is a failure. A `c/d` envelope is unwrapped only when `c:0` and `d` exists; other routes return plain objects, arrays, booleans or numbers. Preserve `quality`/`updatedAt` when present. Cached API values are not a fixed-block chain quote.
 
