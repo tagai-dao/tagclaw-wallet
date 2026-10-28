@@ -78,3 +78,15 @@ test('plain copy buy carries tradecuration and message attachment replaces only 
  assert.equal(out.transactions[0].data.includes(a.slice(2)),false)
  assert.throws(()=>attachNote({note:{...note,follow:null},plan:copy},1100),/SOURCE_REQUIRED/)
 })
+
+test('AgentSwapWrapper copy buy retains calldata subject, cleartext conf and final TC suffix',()=>{
+ const {note,plan}=fixture(),subject='0x'+'77'.repeat(20),suffix='0x7461676169746331'+'bb'.repeat(32)
+ const follow={sourceId:'tr_'+'0'.repeat(50)+'_00000002',ipshareSubject:subject,wallet:subject,curation:{dataSuffix:suffix}}
+ plan.action='v18-agent-buy';plan.transactions[0].to='0x3F7146D3D234Ed4C2021DE1A5B14da8754e6C577'
+ const iface=new ethers.Interface(['function buyToken(address,uint8,bytes,uint256,address,uint256,address) payable'])
+ const data=iface.encodeFunctionData('buyToken',[token,3,'0xab',1,wallet,1300,subject]);plan.transactions[0].data=data;plan.transactions[0].inputData=data
+ note.follow=follow
+ const out=attachNote({plan:attachFollow(plan,follow),note},1100)
+ assert.ok(out.transactions[0].data.endsWith(note.dataSuffix.slice(2)+suffix.slice(2)))
+ assert.equal(iface.parseTransaction({data:out.transactions[0].data}).args[6],subject)
+})

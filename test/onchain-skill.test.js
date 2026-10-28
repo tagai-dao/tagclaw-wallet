@@ -1,3 +1,4 @@
+import { AGENT_SWAP_ABI } from '../skills/tagclaw-onchain/scripts/lib/agent-swap.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -22,7 +23,7 @@ const zero = ethers.ZeroAddress, coder = ethers.AbiCoder.defaultAbiCoder()
 const key = { currency0: zero, currency1: token, hooks: addr('7'), poolManager: D.MANAGER, fee: 10000, parameters: ethers.ZeroHash }
 const poolId = ethers.keccak256(coder.encode([POOL_KEY_TYPE], [key]))
 const salt = '0x000000000000000000000000000000000000000000000000000000000000ae7e'
-const salt16 = '0x0000000000000000000000000000000000000000000000000000000000007437'
+const salt18 = '0x0000000000000000000000000000000000000000000000000000000000010745'
 const config = { name: 'Example', symbol: 'IDX', constituentAssets: [addr('8'), addr('9')], targetWeights: [5000, 5000], basketFeeBps: 100, creatorShareBps: 0, retainCommunityOwnership: true }
 const buy = { from: owner, token, side: 'buy', amount: '101', slippageBps: 200 }
 const a = new ethers.Interface(MULTICALL_ABI)
@@ -38,12 +39,12 @@ function fixture(options = {}) {
     createdTicks: false, createFee: 10n, getIPShare: D.IPSHARE, nutboxCommittee: committee,
     erc20StakingFactory:()=>s.modernFactory?addr('b'):D.FACTORIES.erc20_staking, approvedConstituent: () => !s.unapproved, optionalPoolFactories: () => ['trade', 8000n, true] })
   contract(D.PUMP15,[...PUMP14_ABI,...I.PUMP_EXTRA_ABI],{...contracts.get(D.PUMP.toLowerCase()).values,VERSION:15n,tokenImplementation:D.IMPLEMENTATION15,createdTokens:args=>args[0].toLowerCase()===token&&s.version===15})
-  for (const version of [13, 16, 17]) contract(D.PROFILES[version].pump, [...PUMP14_ABI,...I.PUMP_EXTRA_ABI], { ...contracts.get(D.PUMP.toLowerCase()).values, VERSION: BigInt(version), tokenImplementation: D.PROFILES[version].implementation, createdTokens: args => args[0].toLowerCase() === token && s.version === version })
+  for (const version of [13, 16, 17, 18]) contract(D.PROFILES[version].pump, [...PUMP14_ABI,...I.PUMP_EXTRA_ABI], { ...contracts.get(D.PUMP.toLowerCase()).values, VERSION: BigInt(version), tokenImplementation: D.PROFILES[version].implementation, createdTokens: args => args[0].toLowerCase() === token && s.version === version })
   for (const [version, pump] of Object.entries(D.LEGACY_PUMPS)) contract(pump, [...PUMP14_ABI,...LEGACY_ABI], { createdTokens: true, getFeeRatio: [100n,100n], getBuyAmountByValue: () => s.output, getSellPriceAfterFee: () => s.output })
   contract(D.V2_FACTORY, V2_ABI, { getPair: addr('c') })
   contract(D.V2_ROUTER, V2_ABI, { getAmountsOut: args => [args[0],s.output] })
   contract(addr('c'), V2_ABI, { token0: D.WBNB, token1: token })
-  contract(D.IMPORTED_SWAP, IMPORT_ABI, { quoteBuy: () => s.output, quoteSell: () => s.output })
+  contract(D.AGENT_SWAP, AGENT_SWAP_ABI, { quoteBuy: () => s.output, quoteSell: () => s.output, HANDLE_REGISTRY: D.HANDLE_REGISTRY, ipshare: D.IPSHARE, nutboxRouter: D.NUTBOX_ROUTER, paused:()=>s.wrapperPaused??false, tagaiRatio:20n, sellsmanRatio:20n, tokenNutboxFeeBps:()=>s.nutboxBps??0n, referralHookCodeHash:()=>s.referralEnabled?ethers.keccak256('0x1234'):ethers.ZeroHash })
   contract(D.HANDLE_REGISTRY,I.HANDLE_ABI,{handleOf:()=>s.handle??'agent.ai'})
   contract(D.NUTBOX_ROUTER,I.PERMISSIONS_ABI,{operators:()=>!s.notReady})
   contract(D.BASKET_REGISTRY,[...I.BASKET_REGISTRY_ABI,...I.PERMISSIONS_ABI],{basketVersion:()=>s.badBasket?3n:4n,approvedCreatorForwarders:()=>!s.notReady})
@@ -56,7 +57,7 @@ function fixture(options = {}) {
   contract(D.QUOTER, PCS_QUOTER_ABI, { quoteExactInputSingle: () => [s.output, 123n] })
   contract(D.PERMIT2, PERMIT2_ABI, { allowance: () => [s.permission, s.expiration, 0n] })
   contract(D.IPSHARE, [...IPSHARE_ABI, ...IPSHARE_QUOTE_ABI], { subjectFeePercent: 300n, protocolFeePercent: 200n, getBuyAmountByValue: 2000n, getBuyPriceAfterFee: 1000n, ipshareCreated: () => s.shareCreated, ipshareSupply: 100000n, ipshareBalance: 10000n, getPendingProfits: 20n,
-    getStakerInfo: [owner, 1000n, 100n, 900n, 0n, 20n], createFee: 20n, getSellPriceAfterFee: 5000n })
+    getStakerInfo: [owner, 1000n, 100n, 900n, 0n, 20n], createFee: ()=>s.ipFee??20n, getSellPriceAfterFee: 5000n })
   contract(committee, NUTBOX_COMMITTEE_ABI, { verifyContract: true, getCreateCommunityFee: 30n, getCommunitySettingsFee: 5n, getPoolOperationFee: 7n })
   contract(community, [...NUTBOX_COMMUNITY_ABI,...I.COMMUNITY_INDEX_ABI], { getCommunityToken:token,getCommittee:committee,createdPools:args=>args[0]===0n?pool:addr('d'),committee, poolActived: true, owner, getPoolPendingRewards: 50n })
   contract(pool, [...ERC20_LOCKING_POOL_ABI, ...ERC1155_STAKING_POOL_ABI, ...SOCIAL_CURATION_POOL_ABI], {
@@ -83,7 +84,7 @@ function fixture(options = {}) {
   const provider = {
     getNetwork: async () => ({ chainId: s.chainId ?? 56n }),
     getBlock: async name => { assert.equal(name, 'latest'); return { number: 123, hash: ethers.ZeroHash, timestamp: 1000 } },
-    getCode: async (target, block) => { assert.equal(block, 123); return target.toLowerCase() === D.MULTICALL3.toLowerCase() && !s.noMulticall ? '0x1234' : '0x' },
+    getCode: async (target, block) => { assert.equal(block, 123); return (target.toLowerCase() === D.MULTICALL3.toLowerCase() && !s.noMulticall || target.toLowerCase()===key.hooks.toLowerCase()) ? '0x1234' : '0x' },
     call: async tx => {
       // Any individual contract eth_call (including quoter calls) fails the test.
       assert.equal(tx.to, D.MULTICALL3)
@@ -163,51 +164,44 @@ test('curve sells, listing pending, amount and slippage guards behave without an
   await assert.rejects(trade(await f.open(), buy), /LISTING_PENDING/)
 })
 
-test('V4 quote stays inside Multicall; prepared native swap encoding settles input and takes minimum', async () => {
-  const f = fixture({ listed: true }), r = await trade(await f.open(), buy)
-  const tx = r.transactions[0]
-  assert.equal(tx.to, D.ROUTER); assert.equal(tx.value, '101'); assert.equal(r.quote.minimumOut, '1960')
-  const p = new ethers.Interface(PCS_ROUTER_ABI).parseTransaction({ data: tx.data })
-  assert.equal(p.args[0], '0x10'); assert.equal(p.args[2], 1300n)
-  const [actions, bytes] = coder.decode(['bytes', 'bytes[]'], p.args[1][0])
-  assert.equal(actions, '0x060c0f')
-  assert.deepEqual([...coder.decode(['address', 'uint128'], bytes[1])], [zero, 101n])
-  assert.deepEqual([...coder.decode(['address', 'uint128'], bytes[2])], [token, 1960n])
-  assert.ok(flat(f).some(c => c.target === D.QUOTER && c.method === 'quoteExactInputSingle'))
+test('native Infinity trades quote and execute through AgentSwapWrapper with exact source and recipient', async () => {
+  const f=fixture({listed:true}),r=await trade(await f.open(),buy),tx=r.transactions[0]
+  assert.equal(tx.to,D.AGENT_SWAP);assert.equal(tx.value,'101');assert.equal(r.quote.minimumOut,1960n)
+  const parsed=new ethers.Interface(AGENT_SWAP_ABI).parseTransaction({data:tx.data})
+  assert.equal(parsed.args[0],token);assert.equal(parsed.args[1],3n);assert.equal(parsed.args[3],1960n);assert.equal(parsed.args[4],owner)
+  const [source]=coder.decode([`(address,${POOL_KEY_TYPE})`],parsed.args[2]);assert.equal(source[0],D.QUOTER);assert.equal(source[1].currency1,token)
+  const quote=flat(f).find(c=>c.target===D.AGENT_SWAP&&c.method==='quoteBuy')
+  assert.deepEqual([...quote.args],[token,3n,parsed.args[2],101n])
+  assert.ok(!flat(f).some(c=>[D.IMPORTED_SWAP,D.ROUTER,D.QUOTER].includes(c.target)))
 })
 
-test('V4 sell authorization produces one next action and rebuilds between every confirmation', async () => {
-  const f = fixture({ listed: true, allowance: 1n }), input = { ...buy, side: 'sell' }
-  let r = await trade(await f.open(), input)
-  assert.equal(r.action, 'reset-permit2-allowance'); assert.equal(r.rebuildAfterConfirmation, true)
-  assert.equal(new ethers.Interface(TOKEN_ALLOWANCE_ABI).parseTransaction({ data: r.transactions[0].data }).args[1], 0n)
-  f.s.allowance = 0n
-  r = await trade(await f.open(), input); assert.equal(r.action, 'approve-permit2')
-  f.s.allowance = 101n
-  r = await trade(await f.open(), input); assert.equal(r.action, 'approve-router-in-permit2')
-  const permit = new ethers.Interface(PERMIT2_ABI).parseTransaction({ data: r.transactions[0].data })
-  assert.equal(permit.args[2], 101n); assert.equal(permit.args[3], 4600n)
-  f.s.permission = 101n; f.s.expiration = 5000n; f.s.output = 1900n
-  r = await trade(await f.open(), input)
-  assert.equal(r.action, 'v14-v4-sell'); assert.equal(r.quote.expectedOut, '1900'); assert.equal(r.transactions[0].value, '0')
-  f.s.expiration = 1100n
-  assert.equal((await trade(await f.open(), input)).action, 'approve-router-in-permit2')
+test('external sells reset/approve only AgentSwapWrapper and re-quote after confirmation',async()=>{
+  const f=fixture({listed:true,allowance:1n}),input={...buy,side:'sell'}
+  let r=await trade(await f.open(),input)
+  assert.equal(r.action,'reset-agent-wrapper-allowance');assert.equal(r.rebuildAfterConfirmation,true)
+  let parsed=new ethers.Interface(TOKEN_ALLOWANCE_ABI).parseTransaction({data:r.transactions[0].data})
+  assert.equal(parsed.args[0],D.AGENT_SWAP);assert.equal(parsed.args[1],0n)
+  f.s.allowance=0n;r=await trade(await f.open(),input);assert.equal(r.action,'approve-agent-wrapper')
+  parsed=new ethers.Interface(TOKEN_ALLOWANCE_ABI).parseTransaction({data:r.transactions[0].data});assert.equal(parsed.args[1],101n)
+  f.s.allowance=101n;f.s.output=1900n;r=await trade(await f.open(),input)
+  assert.equal(r.action,'v14-agent-sell');assert.equal(r.transactions[0].to,D.AGENT_SWAP);assert.equal(r.quote.expectedOut,1900n)
+  assert.ok(!flat(f).some(c=>c.target===D.PERMIT2))
 })
 
 test('wrong V4 pool and zero output fail; spot prices invert BNB/token correctly', async () => {
   let f = fixture({ listed: true, badPool: true })
   await assert.rejects(trade(await f.open(), buy), /INVALID_NATIVE_POOL/)
   f = fixture({ listed: true, output: 0n })
-  await assert.rejects(trade(await f.open(), buy), /INVALID_OUTPUT/)
+  await assert.rejects(trade(await f.open(), buy), /ZERO_OUTPUT/)
   f = fixture({ listed: true })
   assert.equal((await price(await f.open(), { token })).priceInBnb, '0.25')
 })
 
 test('creation validates explicit config, computes per-pool fees and encodes both overloads', async () => {
-  const f = fixture({ version:16, shareCreated: false }), input = { version:16, from: owner, tick: 'EXAMPLE', indexConfig: config, salt:salt16, initialBuy: '100' }
+  const f = fixture({ version:18, shareCreated: false }), input = { version:18, from: owner, tick: 'EXAMPLE', indexConfig: config, salt:salt18, initialBuy: '100' }
   const r = await create(await f.open(), { ...input, tradeRewardRatio: 2000 })
   assert.equal(r.settingsCount, 3); assert.equal(r.fees.totalFee, 75n); assert.equal(r.transactions[0].value, '175')
-  assert.equal(r.predictedToken, predict(owner, salt16, 16))
+  assert.equal(r.predictedToken, predict(owner, salt18, 18))
   const p = new ethers.Interface(PUMP14_ABI).parseTransaction({ data: r.transactions[0].data })
   assert.equal(p.args.length, 4); assert.equal(p.args[3][0].factory, D.TRADE_FACTORY)
   const plain = await create(await f.open(), input)
@@ -267,36 +261,36 @@ test('receipt reports pending/reverted hashes and verifies creation calldata and
   await assert.rejects(receipt(f.provider, hash), /RECEIPT_MISMATCH/)
 })
 
-test('v16 is the only creation version and does not require a buyer handle for the atomic buy',async()=>{
-  const f=fixture({version:16,handle:''})
-  const r=await create(await f.open(),{from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt16})
-  assert.equal(r.version,16);assert.equal(r.binanceWalletOnly,true);assert.equal(r.transactions[0].to,D.PROFILES[16].pump)
-  assert.equal(r.predictedToken,predict(owner,salt16,16))
-  assert.ok(flat(f).some(c=>c.target===D.NUTBOX_ROUTER&&c.method==='operators'&&c.args[0]===D.PROFILES[16].pump))
+test('v18 is the only creation version and does not require a buyer handle for the atomic buy',async()=>{
+  const f=fixture({version:18,handle:''})
+  const r=await create(await f.open(),{from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt18})
+  assert.equal(r.version,18);assert.equal(r.binanceWalletOnly,true);assert.equal(r.transactions[0].to,D.PROFILES[18].pump)
+  assert.equal(r.predictedToken,predict(owner,salt18,18))
+  assert.ok(flat(f).some(c=>c.target===D.NUTBOX_ROUTER&&c.method==='operators'&&c.args[0]===D.PROFILES[18].pump))
   assert.ok(flat(f).some(c=>c.target===D.BASKET_REGISTRY&&c.method==='approvedCreatorForwarders'))
   assert.ok(!flat(f).some(c=>c.method==='handleOf'))
-  for (const version of [1,8,13,14,15,17]) await assert.rejects(create(await f.open(),{version,from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt16}),/UNSUPPORTED_CREATE_VERSION/)
+  for (const version of [1,8,13,14,15,16,17]) await assert.rejects(create(await f.open(),{version,from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt18}),/UNSUPPORTED_CREATE_VERSION/)
   f.s.notReady=true
-  await assert.rejects(create(await f.open(),{from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt16}),error=>{
+  await assert.rejects(create(await f.open(),{from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt18}),error=>{
     assert.match(error.message,/PROTOCOL_CREATION_NOT_READY/)
     assert.match(error.message,/protocol contract owners/)
     assert.match(error.message,/not the user wallet/)
-    assert.ok(error.message.includes(D.PROFILES[16].pump))
+    assert.ok(error.message.includes(D.PROFILES[18].pump))
     return true
   })
 })
 
-test('v16 creation options filter candidates and expose missing permissions at one Multicall snapshot', async () => {
-  const f=fixture({version:16}),snapshot=await f.open(),candidates=[{address:addr('8'),symbol:'ASSET',decimals:18}]
+test('v18 creation options filter candidates and expose missing permissions at one Multicall snapshot', async () => {
+  const f=fixture({version:18}),snapshot=await f.open(),candidates=[{address:addr('8'),symbol:'ASSET',decimals:18}]
   const result=await creationOptions(snapshot,{from:owner},candidates)
-  assert.equal(result.version,16);assert.equal(result.ready,true);assert.deepEqual(result.assets,candidates)
+  assert.equal(result.version,18);assert.equal(result.ready,true);assert.deepEqual(result.assets,candidates)
   assert.equal(result.permissions.scope,'protocol-contract')
-  assert.equal(result.permissions.subject,D.PROFILES[16].pump)
+  assert.equal(result.permissions.subject,D.PROFILES[18].pump)
   assert.equal(result.permissions.requiresUserWalletAllowlisting,false)
   assert.equal(result.readiness.code,'READY')
   assert.equal(result.readiness.responsibleParty,null)
   assert.equal(result.settingsFee,5n)
-  assert.ok(flat(f).some(read=>read.target===D.PROFILES[16].pump&&read.method==='approvedConstituent'&&read.args[0]===addr('8')))
+  assert.ok(flat(f).some(read=>read.target===D.PROFILES[18].pump&&read.method==='approvedConstituent'&&read.args[0]===addr('8')))
   f.s.unapproved=true;f.s.notReady=true
   const blocked=await creationOptions(snapshot,{from:owner},candidates)
   assert.equal(blocked.ready,false);assert.deepEqual(blocked.assets,[])
@@ -310,7 +304,7 @@ test('v16 creation options filter candidates and expose missing permissions at o
   const permissionReads=flat(f).filter(read=>['operators','approvedCreatorForwarders'].includes(read.method))
   assert.equal(permissionReads.length,6)
   assert.deepEqual(new Set(permissionReads.map(read=>read.target)),new Set([D.NUTBOX_ROUTER,D.BASKET_REGISTRY]))
-  for(const read of permissionReads)assert.deepEqual([...read.args],[D.PROFILES[16].pump])
+  for(const read of permissionReads)assert.deepEqual([...read.args],[D.PROFILES[18].pump])
 })
 
 test('v15 ordinary curve buys require the real sender handle; sells and listed trades do not',async()=>{
@@ -322,7 +316,8 @@ test('v15 ordinary curve buys require the real sender handle; sells and listed t
   f.s.handle=''
   assert.equal((await trade(await f.open(),{...buy,side:'sell'})).action,'v15-curve-sell')
   f.s.listed=true
-  assert.equal((await trade(await f.open(),buy)).action,'v15-v4-buy')
+  await assert.rejects(trade(await f.open(),buy),/BINANCE_HANDLE_REQUIRED/)
+  f.s.handle='agent.ai';assert.equal((await trade(await f.open(),buy)).action,'v15-agent-buy')
 })
 
 test('token-info reports pending listing and components; token-balance formats raw units',async()=>{
@@ -389,7 +384,7 @@ test('current Nutbox factories are accepted only from trusted Pump configuration
   assert.ok(flat(f).some(c=>c.target===community&&c.method==='getCommunityToken'))
 })
 
-test('legacy v15 receipt remains recognizable while new creation is restricted to v16',async()=>{
+test('legacy v15 receipt remains recognizable while new creation is restricted to v18',async()=>{
   const f=fixture({version:15}),salt15='0x000000000000000000000000000000000000000000000000000000000000ed9a'
   const input={from:owner,tick:'EXAMPLE',indexConfig:config,salt:salt15}
   await assert.rejects(create(await f.open(),{...input,binanceWalletOnly:false}),/MODE_MISMATCH/)
@@ -405,15 +400,15 @@ test('legacy v15 receipt remains recognizable while new creation is restricted t
 })
 
 test('all current index-token versions remain queryable and tradable; v15 and later buys need a handle', async () => {
-  for (const version of [13,14,15,16,17]) {
+  for (const version of [13,14,15,16,17,18]) {
     const fixtureData=fixture({version,handle:''})
     const info=await tokenInfo(await fixtureData.open(),{token,from:owner})
     assert.equal(info.version,version)
     if(version>=15) await assert.rejects(trade(await fixtureData.open(),buy),/HANDLE_NOT_REGISTERED/)
     else assert.equal((await trade(await fixtureData.open(),buy)).transactions[0].to.toLowerCase(),token)
     assert.equal((await trade(await fixtureData.open(),{...buy,side:'sell'})).transactions[0].value,'0')
-    fixtureData.s.listed=true
-    assert.equal((await trade(await fixtureData.open(),buy)).transactions[0].to,D.ROUTER)
+    fixtureData.s.listed=true;fixtureData.s.handle='agent.ai'
+    assert.equal((await trade(await fixtureData.open(),buy)).transactions[0].to,D.AGENT_SWAP)
   }
 })
 
@@ -461,22 +456,22 @@ test('legacy V2 and V4 external routes preserve exact spender, minimum and appro
   const fixtureData=fixture({version:2,listed:true}),snapshot=await fixtureData.open()
   const state=await legacyState(snapshot,{version:2,token,tick:'MEME'})
   const bought=await legacyTrade(snapshot,buy,state)
-  assert.equal(bought.transactions[0].to,D.WRAPPER)
-  const parsed=new ethers.Interface(WRAPPER_ABI).parseTransaction({data:bought.transactions[0].data})
-  assert.equal(parsed.args[1],1960n);assert.equal(parsed.args[3],owner)
+  assert.equal(bought.transactions[0].to,D.AGENT_SWAP)
+  const parsed=new ethers.Interface(AGENT_SWAP_ABI).parseTransaction({data:bought.transactions[0].data})
+  assert.equal(parsed.args[3],1960n);assert.equal(parsed.args[4],owner)
   let sold=await legacyTrade(snapshot,{...buy,side:'sell'},state)
-  assert.equal(sold.action,'approve-wrapper')
-  assert.equal(new ethers.Interface(TOKEN_ALLOWANCE_ABI).parseTransaction({data:sold.transactions[0].data}).args[0],D.WRAPPER)
+  assert.equal(sold.action,'approve-agent-wrapper')
+  assert.equal(new ethers.Interface(TOKEN_ALLOWANCE_ABI).parseTransaction({data:sold.transactions[0].data}).args[0],D.AGENT_SWAP)
   fixtureData.s.allowance=1000n
   sold=await legacyTrade(snapshot,{...buy,side:'sell'},state)
-  assert.equal(sold.transactions[0].to,D.WRAPPER)
+  assert.equal(sold.transactions[0].to,D.AGENT_SWAP)
   const quoted=await legacyPrice(snapshot,{},state)
   assert.equal(quoted.quoteType,'effective-buy-price-including-fees-not-spot')
   for(const version of [7,8,9,11]) {
     const other=await legacyState(snapshot,{version,token,tick:'MEME',pair:JSON.stringify(key)})
     const result=await legacyTrade(snapshot,buy,other)
-    assert.equal(result.transactions[0].to,D.ROUTER)
-    assert.ok(flat(fixtureData).some(read=>read.target===D.QUOTER&&read.method==='quoteExactInputSingle'))
+    assert.equal(result.transactions[0].to,D.AGENT_SWAP)
+    assert.ok(flat(fixtureData).some(read=>read.target===D.AGENT_SWAP&&read.method==='quoteBuy'))
   }
 })
 
@@ -485,12 +480,12 @@ test('V10 imports encode V2/V3/V4 source types without native-token assumptions'
     const fixtureData=fixture(),snapshot=await fixtureData.open()
     const state=await legacyState(snapshot,{version:10,isImport:true,token,tick:'IMPORT',dexVersion,pair:dexVersion===4?poolId:addr('c')})
     const result=await legacyTrade(snapshot,buy,state)
-    assert.equal(result.transactions[0].to,D.IMPORTED_SWAP)
+    assert.equal(result.transactions[0].to,D.AGENT_SWAP)
     const parsed=new ethers.Interface(IMPORT_ABI).parseTransaction({data:result.transactions[0].data})
     assert.equal(parsed.args[1],BigInt(sourceType));assert.equal(parsed.args[3],1960n);assert.equal(parsed.args[4],owner)
-    const quote=flat(fixtureData).find(read=>read.target===D.IMPORTED_SWAP&&read.method==='quoteBuy')
+    const quote=flat(fixtureData).find(read=>read.target===D.AGENT_SWAP&&read.method==='quoteBuy')
     assert.equal(quote.args[0],token);assert.equal(quote.args[1],BigInt(sourceType))
-    assert.equal((await legacyTrade(snapshot,{...buy,side:'sell'},state)).action,'approve-wrapper')
+    assert.equal((await legacyTrade(snapshot,{...buy,side:'sell'},state)).action,'approve-agent-wrapper')
     fixtureData.s.allowance=1000n
     const sold=await legacyTrade(snapshot,{...buy,side:'sell'},state)
     assert.equal(new ethers.Interface(IMPORT_ABI).parseTransaction({data:sold.transactions[0].data}).args[3],101n)
@@ -517,4 +512,40 @@ test('Agent trade origin handle is checked through fixed-block Multicall for all
  assert.deepEqual([...request.args],[owner])
  f.s.handle=''
  await assert.rejects(agentTradeIdentity(await f.open(),{from:owner}),/BINANCE_HANDLE_REQUIRED/)
+})
+
+test('Pump18 internal and all external routes enforce automatic IPShare fee readiness without spending trade principal',async()=>{
+ for(const options of [{version:18},{version:18,listed:true},{version:14,listed:true}]){
+  const f=fixture({...options,shareCreated:false,ipFee:0n})
+  for(const side of ['buy','sell']){
+   f.s.allowance=1000n
+   const r=await trade(await f.open(),{...buy,side})
+   assert.equal(r.automaticIPShare.subject,owner);assert.equal(r.automaticIPShare.autoCreate,true)
+   assert.equal(r.transactions[0].value,side==='buy'?'101':'0')
+   f.s.ipFee=1n
+   await assert.rejects(trade(await f.open(),{...buy,side}),/IPSHARE_CREATION_FEE_REQUIRED/)
+   f.s.ipFee=0n
+  }
+ }
+})
+test('external referral to a native Infinity Hook requires the wrapper-reviewed current code hash',async()=>{
+ const f=fixture({version:18,listed:true}),input={...buy,sellsman:addr('f')}
+ await assert.rejects(trade(await f.open(),input),/AGENT_REFERRAL_HOOK_NOT_ENABLED/)
+ f.s.referralEnabled=true
+ const r=await trade(await f.open(),input)
+ assert.equal(r.ipshareSubject.toLowerCase(),addr('f'))
+ assert.equal(new ethers.Interface(AGENT_SWAP_ABI).parseTransaction({data:r.transactions[0].data}).args[6].toLowerCase(),addr('f'))
+ f.s.wrapperPaused=true;await assert.rejects(trade(await f.open(),input),/AGENT_WRAPPER_PAUSED/)
+})
+test('V18 creation receipt preserves selected configuration and both raw overloads',async()=>{
+ const f=fixture({version:18}),iface=new ethers.Interface(PUMP14_ABI),hash='0x'+'cd'.repeat(32),expected=predict(owner,salt18,18)
+ const event=iface.encodeEventLog(iface.getEvent('NewToken'),['EXAMPLE',expected,owner])
+ f.provider.getTransactionReceipt=async()=>({status:1,to:D.PROFILES[18].pump,blockNumber:123,blockHash:ethers.ZeroHash,logs:[{address:D.PROFILES[18].pump,...event}]})
+ for(const withPool of [false,true]){
+  const prepared=await create(await f.open(),{from:owner,tick:'EXAMPLE',salt:salt18,indexConfig:config,initialBuy:'0',tradeRewardRatio:withPool?2000:0})
+  f.provider.getTransaction=async()=>({from:owner,to:D.PROFILES[18].pump,value:BigInt(prepared.transactions[0].value),data:prepared.transactions[0].data})
+  const parsed=iface.parseTransaction({data:prepared.transactions[0].data})
+  assert.equal(parsed.args.length,withPool?4:3);assert.deepEqual([...parsed.args[2].targetWeights],[5000n,5000n])
+  assert.equal((await receipt(f.provider,hash)).token,expected)
+ }
 })

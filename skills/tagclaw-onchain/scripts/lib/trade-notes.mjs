@@ -99,7 +99,7 @@ function assertReferral(data,action,subject){
   const decoded=iface.parseTransaction({data}),args=decoded.args
   let actual
   if(action.includes('-curve-'))actual=args[1]
-  else if(action.includes('-import-'))actual=args[6]
+  else if((action.includes('-import-')||action.includes('-agent-')))actual=args[6]
   else if(action.includes('-v2-'))actual=args[0]
   else if(action.includes('-v4-')){
    const coder=ethers.AbiCoder.defaultAbiCoder(),[actions,inputs]=coder.decode(['bytes','bytes[]'],args[1][0])
@@ -116,7 +116,7 @@ export function attachNote(input,now=Math.floor(Date.now()/1000)){
  const expected='0x'+(n.conf??255).toString(16).padStart(2,'0')+MARKER+n.commitment.slice(2)
  if(n.dataSuffix?.toLowerCase()!==expected)throw new Error('NOTE_SUFFIX_MISMATCH')
  walletPayload(plan,now)
- const match=/^v\d+-(?:curve|v2|v4|import)-(buy|sell)$/.exec(plan.action??'')
+ const match=/^v\d+-(?:curve|v2|v4|import|agent)-(buy|sell)$/.exec(plan.action??'')
  if(!match||plan.rebuildAfterConfirmation===true)throw new Error('NOTE_REQUIRES_FINAL_TOKEN_TRADE')
  if(match[1]!==n.side||address(plan.token)!==n.token||address(plan.transactions[0].from)!==n.wallet)throw new Error('NOTE_PLAN_CONTEXT_MISMATCH')
  if(plan.follow&&!n.follow)throw new Error('FOLLOW_NOTE_SOURCE_REQUIRED')

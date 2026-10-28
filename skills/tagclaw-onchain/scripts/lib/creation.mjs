@@ -24,20 +24,20 @@ function protocolReadiness(pump, operator, forwarder) {
 }
 
 export async function creationOptions(snapshot, input, candidates = JSON.parse(fs.readFileSync(new URL('./constituents.json', import.meta.url), 'utf8'))) {
-  const from = address(input.from, 'from'), profile = D.PROFILES[16]
+  const from = address(input.from, 'from'), profile = D.PROFILES[18]
   const [version, implementation, pumpFee, ipshare, committee, operator, forwarder, ...approved] = await snapshot.read([
     call(profile.pump, PUMP14_ABI, 'VERSION'), call(profile.pump, PUMP14_ABI, 'tokenImplementation'),
     call(profile.pump, PUMP14_ABI, 'createFee'), call(profile.pump, PUMP14_ABI, 'getIPShare'), call(profile.pump, PUMP14_ABI, 'nutboxCommittee'),
     call(D.NUTBOX_ROUTER, PERMISSIONS_ABI, 'operators', [profile.pump]), call(D.BASKET_REGISTRY, PERMISSIONS_ABI, 'approvedCreatorForwarders', [profile.pump]),
     ...candidates.map(asset => call(profile.pump, PUMP14_ABI, 'approvedConstituent', [address(asset.address, 'constituent')]))
   ])
-  if (version !== 16n || !same(implementation, profile.implementation)) throw new Error('V16_DEPLOYMENT_MISMATCH')
+  if (version !== 18n || !same(implementation, profile.implementation)) throw new Error('V18_DEPLOYMENT_MISMATCH')
   const [hasShare, ipFee, communityFee, settingsFee, tradePool, verified] = await snapshot.read([
     call(ipshare, IPSHARE_ABI, 'ipshareCreated', [from]), call(ipshare, IPSHARE_ABI, 'createFee'),
     call(committee, NUTBOX_COMMITTEE_ABI, 'getCreateCommunityFee'), call(committee, NUTBOX_COMMITTEE_ABI, 'getCommunitySettingsFee'),
     call(profile.pump, PUMP14_ABI, 'optionalPoolFactories', [D.TRADE_FACTORY]), call(committee, NUTBOX_COMMITTEE_ABI, 'verifyContract', [D.TRADE_FACTORY])
   ])
-  return { ...snapshot.metadata(), version: 16, binanceWalletOnly: true, from, pump: profile.pump, tokenImplementation: implementation,
+  return { ...snapshot.metadata(), version: 18, binanceWalletOnly: true, from, pump: profile.pump, tokenImplementation: implementation,
     ready: Boolean(operator && forwarder),
     permissions: { scope: 'protocol-contract', subject: profile.pump, requiresUserWalletAllowlisting: false, nutboxOperator: operator, basketForwarder: forwarder },
     readiness: protocolReadiness(profile.pump, operator, forwarder),
@@ -56,7 +56,7 @@ export function indexConfig(config) {
   if (!Number.isInteger(basketFeeBps) || basketFeeBps < 100 || basketFeeBps > 300 || !Number.isInteger(creatorShareBps) || creatorShareBps < 0 || creatorShareBps > 3000 || typeof retainCommunityOwnership !== 'boolean') throw new Error('INVALID_INDEX_FEES_OWNERSHIP')
   return { name, symbol, constituentAssets: assets, targetWeights: weights, basketFeeBps, creatorShareBps, retainCommunityOwnership }
 }
-export function predict(creator, salt, version = 16) {
+export function predict(creator, salt, version = 18) {
   const profile=D.PROFILES[version]; if(!profile) throw new Error('UNSUPPORTED_CREATE_VERSION')
   const codeHash=ethers.keccak256(`0x3d602d80600a3d3981f3363d3d373d3d3d363d73${profile.implementation.slice(2)}5af43d82803e903d91602b57fd5bf3`)
   return ethers.getCreate2Address(profile.pump, ethers.keccak256(coder.encode(['address', 'bytes32'], [creator, salt])), codeHash)
@@ -77,8 +77,8 @@ async function saltFor(snapshot, from, supplied, profile) {
 
 export async function create(snapshot, input) {
   const from = address(input.from, 'from'), config = indexConfig(input.indexConfig)
-  if (input.version !== undefined && input.version !== 16) throw new Error('UNSUPPORTED_CREATE_VERSION: use the supported creation helper without overriding its deployment profile')
-  const profile = D.PROFILES[16]
+  if (input.version !== undefined && input.version !== 18) throw new Error('UNSUPPORTED_CREATE_VERSION: only version 18 token deployment is supported')
+  const profile = D.PROFILES[18]
   if(input.binanceWalletOnly!==undefined&&input.binanceWalletOnly!==true)throw new Error('CREATION_MODE_MISMATCH')
   const tick = input.tick
   if (typeof tick !== 'string' || Buffer.byteLength(tick)>16 || !/^(?!\d+$)[A-Za-z0-9\u4e00-\u9fa5_]{1,16}$/.test(tick) || ['tiptag', 'tagai', 'tagaidao', 'deploy'].includes(tick.toLowerCase())) throw new Error('INVALID_TICK')
@@ -89,8 +89,8 @@ export async function create(snapshot, input) {
     call(profile.pump, PUMP14_ABI, 'createFee'), call(profile.pump, PUMP14_ABI, 'getIPShare'), call(profile.pump, PUMP14_ABI, 'nutboxCommittee'),
     ...config.constituentAssets.map(asset => call(profile.pump, PUMP14_ABI, 'approvedConstituent', [asset]))
   ])
-  if (version !== BigInt(profile.version) || !same(implementation, profile.implementation)) throw new Error('V16_DEPLOYMENT_MISMATCH')
-  if (profile.version===16) {
+  if (version !== BigInt(profile.version) || !same(implementation, profile.implementation)) throw new Error('V18_DEPLOYMENT_MISMATCH')
+  if (profile.version===18) {
     const [operator,forwarder]=await snapshot.read([call(D.NUTBOX_ROUTER,PERMISSIONS_ABI,'operators',[profile.pump]),call(D.BASKET_REGISTRY,PERMISSIONS_ABI,'approvedCreatorForwarders',[profile.pump])])
     if (!operator || !forwarder) {
       const readiness = protocolReadiness(profile.pump, operator, forwarder)

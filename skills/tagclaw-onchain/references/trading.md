@@ -1,59 +1,49 @@
-# Trade existing TagAI tokens
+# Token trading
 
-Trading uses each token's actual native version or imported DEX source on BSC; do not upgrade an old token, call the current creation factory for it, or replace an import's route with a native curve.
+Resolve the full address and market. TagAI internal trades use the token's actual version; **all external trades use AgentSwapWrapper** `0x3F7146D3D234Ed4C2021DE1A5B14da8754e6C577`. Do not prepare a trade through ImportedTokenSwapWrapper, legacy wrappers or Universal Router directly.
 
-To publish the agent's public reason with a trade, use [trade notes](trade-notes.md) on the final swap plan before wallet preview. Report the successful hash for asynchronous validation; a publication failure never justifies another trade. Public verified posts and activity are available through `api` resource `agent-feed`, filtered by `tick`, `agentId` and `type`.
+| Market | Route |
+|---|---|
+| Native V1–V9/V11 internal | Version-specific token buy/sell ABI. V5 buys and V8 buys/sells require existing protocol eligibility signatures. |
+| Native V13–V18 internal | Token buy/sell; reject listing-pending state. V15+ ordinary buys require a Binance handle; V17/V18 enforce cumulative internal buys ≤10 million tokens per wallet. Sales do not reset the limit. |
+| Native listed V1–V6 | AgentSwapWrapper using the canonical Pancake V2 pair. |
+| Native listed V7–V18 | AgentSwapWrapper using the token's verified Infinity CL pool. |
+| Imported tokens | AgentSwapWrapper with actual V2, V3 or Infinity CL metadata; no native curve. |
 
-## Version and market matrix
-
-| Token | Internal market | External market |
-|---|---|---|
-| Native v1 | Four-argument buy with receiver field; standard sell | Pancake V2 via TagAI wrapper |
-| Native v2–v4, v6 | Standard curve buy/sell | Pancake V2 via TagAI wrapper |
-| Native v5 | Buy requires protocol eligibility signature; sell is standard | Pancake V2 via TagAI wrapper |
-| Native v7 | Standard curve buy/sell | Verified native BNB/token PCS V4 pool |
-| Native v8 | Buy **and** sell require protocol signature and deadline | Verified native BNB/token PCS V4 pool |
-| Native v9/v11 | Standard curve buy/sell | Verified native BNB/token PCS V4 pool |
-| Native v13/v14 | Current dynamic-fee curve; listing may be pending | Verified native BNB/token PCS V4 pool |
-| Native handle-gated tokens | Same, with a handle check for ordinary buys | Verified native BNB/token PCS V4 pool |
-| Legacy imports, e.g. v6 | No native curve | Legacy V2 import wrapper |
-| Imported v10 | No native curve | ImportedTokenSwapWrapper with actual V2/V3/PCS V4 source |
-
-There is no assumed native v10/v12 deployment. Unknown versions or pool types are explicit failures, not permission to reuse a nearby ABI. The helper uses the token's `listed` and (where supported) `listingPending` values, validates factory membership and V4 key binding, and never trusts an API-provided transaction target.
-
-## Prepare a quote and the next unsigned transaction
-
-Resolve the tick/address first, then write:
+There is no assumed native V10/V12 deployment. Unknown versions or pool types fail explicitly.
 
 ```json
 {
-  "from":"0xCURRENT_BINANCE_BSC_ADDRESS",
-  "tick":"EXACT_TICK",
+  "from":"0xCURRENT_BSC_WALLET",
+  "token":"0xFULL_TOKEN_ADDRESS",
   "side":"buy",
   "amount":"1000000000000000",
   "slippageBps":200
 }
 ```
 
-Or replace `tick` with full `token`. `amount` is BNB wei for buys and raw token units for sells. Read decimals rather than assuming 18 for imported tokens. Optional `sellsman` is a user-chosen referral/fee recipient; omit if none. Do not invent one.
-
 ```bash
 node scripts/tagclaw.mjs prepare-trade --input trade.json --out plan.json
 ```
 
-Show expected output, **minimum output**, slippage, input, route, sender and recipient, current block and expiry. Default slippage is 200 bps (2%); disclose it. Internal routes with zero requested slippage encode a positive protection check rather than disabling the contract's slippage check.
+Use `tick` instead of `token` only after exact resolution. `amount` is BNB wei for buys, raw token units for sells; read decimals. Optional `sellsman` selects an IPShare referral. Copy buys use `followTxHash` or `followAgentId`; the helper resolves and pins the original trader's referral and canonical trade-curation source.
 
-`prepare-trade` produces one action: an approval/reset, Permit2 permission, or swap. If `rebuildAfterConfirmation:true`, confirm that one action through the wallet, wait for a status-1 receipt, and rerun the original request. Fresh preparation creates a new fixed-block snapshot; do not reuse a quote across approval delays. Exact approvals are used, including reset-to-zero where necessary.
+Every Agent trade requires the actual sender's Binance handle. AgentSwapWrapper also creates the sender's missing IPShare; Pump18 does the same for internal buys and sells. Creation must be free and IPShare must be active; otherwise prepare a separate IPShare creation if requested, then rebuild. Only the sender receives automatic creation.
 
-For wallet preview/execution/order tracking, read [Binance execution](binance.md). A quote is not authorization to approve or swap. Conditional instructions such as “buy when it drops” do not authorize an immediate market trade; this helper does not implement trigger orders.
+External sells approve **AgentSwapWrapper** for the exact amount. After any reset/approval succeeds, rerun preparation before the swap. Old-wrapper or Permit2 allowances do not authorize the new wrapper.
 
-## Protocol restrictions and recoverable states
+The wrapper accepts these source encodings; helpers construct them from verified pool metadata:
 
-- **v5 buy/v8 curve trades:** preparation accepts `signature` and, for v8, `deadline` from a legitimate existing protocol authorization. Those historical signing services enforce platform eligibility. Without it, return `LEGACY_ELIGIBILITY_REQUIRED`; explain that this particular historical curve trade cannot be completed from the registration-free workflow. Do not register an account, fabricate a signature, omit the signature, or trade immediately elsewhere. Public queries remain available.
-- **Handle-gated buys:** a connected Binance session alone does not prove a handle exists. Check the selected address on chain. Missing handle blocks that ordinary curve buy; creation/atomic initial buy, sells and listed trades are exempt. Guide the user to the Binance Wallet handle flow, not TagAI social registration.
-- **v17 cumulative curve buys:** the helper reads `innerMarketBought(from)` and `INNER_MARKET_BUY_LIMIT()` at the quote snapshot and rejects an expected buy above the remaining allowance. Selling does not reset that cumulative allowance. Listed-market trades are unaffected. Creation remains on the separately supported creation implementation.
-- **Listing pending:** wait for listing finalization and reprepare. Do not use stale API pair metadata.
-- **V2/V3/V4 imports:** retain `isImport`, `version`, `dexVersion` and full `pair` metadata. A V4 bytes32 ID is not a V2 address; an imported token may have a non-BNB quote leg. The current import wrapper quotes the actual route; do not force a direct BNB pair.
-- **API unavailable or unresolved identity:** report the failure. Do not guess an unknown token's protocol version or execute against an API-supplied arbitrary router.
+| `sourceType` | `sourceData` |
+|---|---|
+| `0` V2 | `abi.encode((address router,address pair))` |
+| `1` V3 | `abi.encode((address router,address quoter,address pool))` |
+| `3` Infinity CL | `abi.encode((address quoter,(address currency0,address currency1,address hooks,address poolManager,uint24 fee,bytes32 parameters) pool))` |
 
-Copy buys accept `followTxHash` or `followAgentId` on `prepare-trade`. The helper resolves an accepted source, pins its canonical trade-curation source ID and passes the original trader wallet as the IPShare subject. Prepare the message with the resolved exact `followTxHash`; do not substitute an unrelated sellsman. See [trade notes](trade-notes.md).
+V4 pool IDs are not pair addresses. Non-BNB quote assets require a configured executable BNB bridge route in the wrapper's NutboxRouter. Never substitute a direct BNB pool or arbitrary router.
+
+Quotes use AgentSwapWrapper's net buy/sell output, including current wrapper fees. Platform and referral fees default to 20 bps each but are read from chain. Nutbox token fees default to zero and may be enabled per token. DEX and Hook fees are additional. Transfer taxes and caller-dependent Hook behavior require the **full wallet simulation from the actual sender**; a quote is an estimate. Never claim simulation success from a quote or silently raise slippage.
+
+For a selected referral on a native Infinity pool, the helper checks that the wrapper authorizes the Hook's current code hash. Missing authorization blocks that referral flow until the protocol owner enables it. Do not silently discard the chosen referral or switch wrappers.
+
+For a public reason/confidence, finish approvals and follow [trade messages](trade-notes.md) before wallet preview. A publication failure does not justify another trade. See [wallet execution](binance.md) for signing and result tracking.

@@ -1,7 +1,8 @@
+import { agentQuote, agentTrade } from './agent-swap.mjs'
 import { ethers } from 'ethers'
 import * as deployment from './deployment.mjs'
 import { call } from './snapshot.mjs'
-import { address, uint, slippage, same, coder, nativeBalance, plan, v4Trade, poolKey } from './prepare.mjs'
+import { address, uint, slippage, same, coder, nativeBalance, plan, poolKey } from './prepare.mjs'
 import { PUMP14_ABI, TOKEN14_ABI, PCS_MANAGER_ABI, POOL_KEY_TYPE } from './v14-abi.mjs'
 import { ERC20_BALANCE_ABI, TOKEN_ALLOWANCE_ABI } from './erc20-abi.mjs'
 
@@ -67,49 +68,6 @@ export async function legacyState(snapshot, metadata) {
   return { ...snapshot.metadata(), token, version, symbol, decimals: Number(decimals), totalSupply, isImport: false, pump, supply, listed, pending: false, poolId, market: listed ? 'external' : 'internal', metadata }
 }
 
-async function importSource(snapshot, state) {
-  const { dexVersion, pair } = state.metadata
-  if (Number(dexVersion) === 2 || Number(dexVersion) === 3) {
-    const pool = address(pair, 'pair')
-    const [token0, token1] = await snapshot.read([call(pool, V2_ABI, 'token0'), call(pool, V2_ABI, 'token1')])
-    if (![token0, token1].some(asset => same(asset, state.token))) throw new Error('IMPORT_POOL_TOKEN_MISMATCH')
-    return Number(dexVersion) === 2
-      ? { sourceType: 0, sourceData: coder.encode(['(address router,address pair)'], [[deployment.V2_ROUTER, pool]]) }
-      : { sourceType: 1, sourceData: coder.encode(['(address router,address quoter,address pool)'], [[deployment.V3_ROUTER, deployment.V3_QUOTER, pool]]) }
-  }
-  if (Number(dexVersion) === 4) {
-    let poolId
-    if (ethers.isHexString(pair, 32)) poolId = pair
-    else {
-      let key
-      try { key = typeof pair === 'string' ? JSON.parse(pair) : pair } catch { throw new Error('IMPORT_V4_POOL_INVALID') }
-      if (!key) throw new Error('IMPORT_V4_POOL_REQUIRED')
-      poolId = ethers.keccak256(coder.encode([POOL_KEY_TYPE], [key]))
-    }
-    const [key] = await snapshot.read([call(deployment.MANAGER, PCS_MANAGER_ABI, 'poolIdToPoolKey', [poolId])])
-    if (!same(key.poolManager, deployment.MANAGER) || ![key.currency0, key.currency1].some(asset => same(asset, state.token)) || !same(ethers.keccak256(coder.encode([POOL_KEY_TYPE], [key])), poolId)) throw new Error('IMPORT_V4_POOL_MISMATCH')
-    return { sourceType: 3, sourceData: coder.encode([`(address quoter,${POOL_KEY_TYPE} pool)`], [[deployment.QUOTER, key]]) }
-  }
-  throw new Error(`UNKNOWN_IMPORT_DEX: ${dexVersion}; do not use a V2 fallback`)
-}
-
-async function externalQuote(snapshot, state, buy, amount) {
-  if (state.isImport && state.version === 10) {
-    const source = await importSource(snapshot, state)
-    const [out] = await snapshot.read([call(deployment.IMPORTED_SWAP, IMPORT_ABI, buy ? 'quoteBuy' : 'quoteSell', [state.token, source.sourceType, source.sourceData, amount])])
-    return { expected: out, ...source, wrapper: deployment.IMPORTED_SWAP }
-  }
-  if (state.isImport && Number(state.metadata.dexVersion) !== 2) throw new Error('LEGACY_IMPORT_REQUIRES_V2: current V10 imports use the multi-DEX wrapper')
-  const [pair] = await snapshot.read([call(deployment.V2_FACTORY, V2_ABI, 'getPair', [deployment.WBNB, state.token])])
-  address(pair, 'pair')
-  const [token0, token1] = await snapshot.read([call(pair, V2_ABI, 'token0'), call(pair, V2_ABI, 'token1')])
-  if (![token0, token1].some(asset => same(asset, state.token)) || ![token0, token1].some(asset => same(asset, deployment.WBNB))) throw new Error('V2_PAIR_MISMATCH')
-  const path = buy ? [deployment.WBNB, state.token] : [state.token, deployment.WBNB]
-  const [amounts] = await snapshot.read([call(deployment.V2_ROUTER, V2_ABI, 'getAmountsOut', [buy ? amount * 9800n / 10000n : amount, path])])
-  if (amounts.length !== 2) throw new Error('V2_QUOTE_INCOMPLETE')
-  return { expected: buy ? amounts[1] : amounts[1] * 9800n / 10000n, path, pair, wrapper: state.isImport ? deployment.IMPORT_WRAPPER : deployment.WRAPPER }
-}
-
 async function curveQuote(snapshot, state, buy, amount) {
   if (!buy) {
     if (amount > state.supply) throw new Error('SELL_EXCEEDS_CURVE_SUPPLY')
@@ -131,8 +89,8 @@ export async function legacyTrade(snapshot, input, state) {
   const buy = input.side === 'buy', sellsman = input.sellsman ? address(input.sellsman, 'sellsman') : ethers.ZeroAddress
   const [balance] = await snapshot.read([buy ? nativeBalance(from) : call(state.token, ERC20_BALANCE_ABI, 'balanceOf', [from])])
   if (balance < amount) throw new Error('INSUFFICIENT_TRADE_BALANCE')
-  if (state.listed && state.poolId) return v4Trade(snapshot, { ...input, token: state.token }, state)
-  const route = state.listed ? await externalQuote(snapshot, state, buy, amount) : { expected: await curveQuote(snapshot, state, buy, amount) }
+  if (state.listed) return agentTrade(snapshot, { ...input, token: state.token }, state)
+  const route = { expected: await curveQuote(snapshot, state, buy, amount) }
   const expected = route.expected, actualBps = Math.max(1, bps)
   const contractExpected = bps === 0 ? (expected * 10000n + 9998n) / 9999n : expected
   const minimum = state.listed ? expected * BigInt(10000 - bps) / 10000n : contractExpected * BigInt(10000 - actualBps) / 10000n
@@ -155,16 +113,7 @@ export async function legacyTrade(snapshot, input, state) {
     }
     return plan(snapshot, from, `v${state.version}-curve-${input.side}`, state.token, abi, method, args, buy ? amount : 0n, details)
   }
-  if (!buy) {
-    const [allowance] = await snapshot.read([call(state.token, TOKEN_ALLOWANCE_ABI, 'allowance', [from, route.wrapper])])
-    if (allowance < amount) return plan(snapshot, from, allowance > 0n ? 'reset-wrapper-allowance' : 'approve-wrapper', state.token, TOKEN_ALLOWANCE_ABI, 'approve', [route.wrapper, allowance > 0n ? 0n : amount], 0n, { ...details, rebuildAfterConfirmation: true })
-  }
-  const deadline = snapshot.block.timestamp + 300
-  const modernImport = route.wrapper === deployment.IMPORTED_SWAP
-  const args = modernImport
-    ? [state.token, route.sourceType, route.sourceData, ...(buy ? [] : [amount]), minimum, from, deadline, sellsman]
-    : [...(buy ? [sellsman] : [amount]), minimum, route.path, from, deadline, ...(buy ? [] : [sellsman]), state.isImport ? deployment.V2_ROUTER : deployment.IPSHARE]
-  return plan(snapshot, from, `v${state.version}-${modernImport ? 'import' : 'v2'}-${input.side}`, route.wrapper, modernImport ? IMPORT_ABI : WRAPPER_ABI, buy ? 'buyToken' : 'sellToken', args, buy ? amount : 0n, details)
+
 }
 
 export async function legacyPrice(snapshot, input, state) {
@@ -174,7 +123,7 @@ export async function legacyPrice(snapshot, input, state) {
     return { ...snapshot.metadata(), token: state.token, version: state.version, priceInBnb: ethers.formatUnits((1n << 192n) * 10n ** 36n / (sqrt * sqrt), 36), quoteType: 'spot-not-execution' }
   }
   const amount = uint(input.referenceAmount ?? '1000000000000000', 'referenceAmount')
-  const expected = state.listed ? (await externalQuote(snapshot, state, true, amount)).expected : await curveQuote(snapshot, state, true, amount)
+  const expected = state.listed ? (await agentQuote(snapshot, state, true, amount)).expected : await curveQuote(snapshot, state, true, amount)
   if (expected <= 0n) throw new Error('ZERO_OUTPUT')
   return { ...snapshot.metadata(), token: state.token, version: state.version, market: state.market, priceInBnb: ethers.formatUnits(amount * 10n ** BigInt(state.decimals) * 10n ** 18n / expected, 36), referenceAmount: amount, expectedOut: expected, quoteType: 'effective-buy-price-including-fees-not-spot' }
 }

@@ -1,8 +1,8 @@
 # Guided token issuance
 
-Issue tokens on BSC using `prepare-create`. The helper selects the supported factory and implementation internally; omit the optional version input and do not ask the user to choose a protocol version. Existing-token queries and trades continue to use each token's actual deployment.
+Deploy **V18 tokens only** on BSC using `prepare-create`. Omit `version` or set it to `18`; other creation versions are rejected. Existing-token queries and trades use each token's actual version.
 
-Do not run the social-account registration or local-wallet setup workflow. `POST /pump/v16/register` below records **token metadata after deployment**; it does not create a user account.
+Do not run the social-account registration or local-wallet setup workflow. `POST /pump/v18/register` below records **token metadata after deployment**; it does not create a user account.
 
 ## 1. Collect the token identity
 
@@ -36,17 +36,9 @@ node scripts/tagclaw.mjs creation-options --input creator.json
 
 This command reads creation-factory configuration and permissions through fixed-block Multicall, filtering the bundled governance candidate catalog by **current on-chain approval**. It works independently of the HTTP creation-options endpoint. Require matching `chainId:56`, factory/version/implementation from the bundled deployment profile, `ready:true` and usable `assets`. `ready:false` exposes the missing Nutbox/Basket permissions and blocks creation; an agent must not change owner permissions to work around it. Display asset symbols **and full addresses**, and the trade-pool maximum/enabled state. Refresh the full skill to discover newly added governance candidates; never assume every bundled candidate is approved.
 
-### Interpret protocol readiness correctly
+`permissions.subject` is the Pump18 factory. `ready:false` means its Nutbox operator or Basket forwarder activation is missing. Report the exact missing roles; the protocol owners must activate the factory. Do not request wallet allowlisting. Continue collecting parameters, but do not upload assets or deploy until ready.
 
-`permissions.scope` is `protocol-contract`, and `permissions.subject` is the issuance factory, **not** the user wallet in `from`. The underlying checks are `NutboxRouter.operators(factory)` and `BasketRegistry.approvedCreatorForwarders(factory)`. `requiresUserWalletAllowlisting:false` is explicit: ordinary users do not obtain these roles. `readiness.code:PROTOCOL_ACTIVATION_PENDING` means platform-wide protocol activation is incomplete; the affected contract owners must activate the factory. The helper does not perform this administration.
-
-Explain a failed readiness check in the user's language, for example:
-
-> Token issuance is temporarily unavailable because the platform's issuance contract is awaiting protocol activation. This is not a wallet permission issue; you do not need to register or request wallet whitelisting. We can still query data and collect the token configuration, but cannot submit the deployment until the platform activates its contract.
-
-Do not present internal deployment version numbers as a user prerequisite. Do not say “wait until your address receives Nutbox/Basket permissions.” Parameter collection may continue if useful, but defer uploads, approvals and deployment. Do not call a wallet balance “too low” or “tight” without the selected configuration's actual fees and an actual gas estimate; report missing estimates as unknown.
-
-Public API resource `creation-options` additionally reads `GET /pump/v16/creation/<creator>` for server metadata. A failed API is reported as such, without fabricating a successful response. API data has its own source block; `prepare-create` rereads required chain configuration at a fresh fixed-block Multicall snapshot. Do not merge API and chain reads into a purported single snapshot.
+The optional public HTTP endpoint is `GET /pump/v18/creation/<creator>`. Preparation independently rereads chain state through fixed-block Multicall.
 
 ## 3. Guide the economic parameters
 
@@ -60,26 +52,49 @@ Preparation and read-only checks do not need a separate approval of the paramete
 | `indexConfig.symbol` | Symbol of that index asset | Nonempty, ≤16 UTF-8 bytes |
 | `constituentAssets` | Which approved assets the community's index tracks | 1–4 distinct current approved contract addresses |
 | `targetWeights` | Relative allocation among those assets, in the same order | Positive integer bps summing to 10000; 60%/40% becomes `[6000,4000]` |
-| `basketFeeBps` | Associated basket fee | Integer 100–300 bps, i.e. 1%–3% |
+| `basketFeeBps` | Fee charged when buying, selling or redeeming the associated index basket, separate from community-token trading fees | Integer 100–300 bps, i.e. 1%–3% |
 | `creatorShareBps` | Creator's share of distributable basket fees, not a percentage of the whole supply | Integer 0–3000 bps, i.e. 0%–30% |
 | `retainCommunityOwnership` | Whether the creator keeps community owner control for later administration | Explicit `true` or `false`; do not assume |
 | `initialBuy` | Optional atomic first purchase during creation | BNB in wei; explicitly confirm no buy (`"0"`) or the requested amount |
 | `tradeRewardRatio` | Optional trade-curation pool allocation; reduces the allocation distributed to constituent LP pools | Explicit 0 to disable; otherwise positive bps ≤8000 **and** the current enabled factory maximum |
 
-Example prompt:
+## 4. Understand the contract arguments
 
-> Which 1–4 approved assets and weights should we use? What index name/symbol, basket fee, creator fee share and ownership choice do you want? Should creation include an initial buy or a trade-mining allocation?
+| Helper input | Meaning |
+|---|---|
+| `from` | The actual creator's public BSC wallet address. It must match the wallet executing the transaction and receives the initial purchase and retained community ownership. |
+| `version` | Omit or use `18`; deployment through another version is rejected. |
+| `binanceWalletOnly` | Omit or use `true`; records the issued token's handle-gated trading mode. It does not create a wallet or social account. |
 
-You may propose a configuration when asked for suggestions, but label it as a proposal and get the user's selection. Never turn example addresses, 50/50 weights, ownership retention, or a nonzero initial buy into an undisclosed default.
+The helper encodes either:
 
-## 4. Prepare, preserve and review
+```solidity
+createToken(string tick, bytes32 salt, IndexConfig indexConfig)
+createToken(string tick, bytes32 salt, IndexConfig indexConfig, OptionalPoolConfig[] optionalPools)
+```
+
+| Argument | Meaning and handling |
+|---|---|
+| `tick` | Community token name and symbol. Separate from the associated index name/symbol. |
+| `salt` | CREATE2 deployment seed, exactly 32 bytes. The helper generates an unused predicted address ending in `3333`; save both salt and predicted token. This is a technical value, not an economic choice to ask the owner. The sender, Pump and implementation also determine the address. |
+| `indexConfig` | The seven index fields listed above; ask for every missing choice. Assets and weights share the same ordering. |
+| `optionalPools[].factory` | Protocol-approved factory of an additional community reward pool. This helper supports the trade-curation factory returned by `creation-options`. |
+| `optionalPools[].rewardRatio` | Share of **total community pool rewards**, in bps; not a trading tax or index weight. The helper derives it from `tradeRewardRatio`. |
+| `optionalPools[].meta` | Factory-specific initialization bytes. The supported trade-curation pool uses `0x`; the helper supplies it. Do not invent bytes for another factory. |
+| Transaction `value` | Pump fee + missing-IPShare creation fee + community fee + settings fee × (constituent pools + optional pools) + `initialBuy`. The helper calculates it from current on-chain fees. |
+
+`tradeRewardRatio:0` selects the three-argument overload. A positive ratio selects the four-argument overload with one trade-curation pool. Remaining reward allocation is distributed across constituent LP pools proportionally to `targetWeights`; e.g. `[6000,4000]` with trade rewards `2000` produces `[4800,3200,2000]`. Pump18 supports at most two optional pools in its raw ABI, but this helper does not prepare other pool adapters.
+
+`retainCommunityOwnership:false` renounces community ownership and cannot be undone. `true` retains administrator control. Explain this before asking the owner to choose. An initial buy spends additional BNB in the same creation transaction, receives tokens for the creator and is not a separate later market order.
+
+## 5. Prepare, preserve and review
 
 Example **shape**, not a recommended asset allocation (`0x...` placeholders must be replaced):
 
 ```json
 {
   "from":"0xCURRENT_BSC_WALLET",
-  "version":16,
+  "version":18,
   "binanceWalletOnly":true,
   "tick":"MYCOIN",
   "indexConfig":{
@@ -100,29 +115,29 @@ Example **shape**, not a recommended asset allocation (`0x...` placeholders must
 node scripts/tagclaw.mjs prepare-create --input create.json --out plan.json
 ```
 
-Preparation verifies the Pump16 version/template, unused tick, approved assets, Nutbox operator/Basket forwarder permissions, optional pool permissions and wallet funds. Save the returned **salt** into `create.json` immediately and preserve `predictedToken`; rebuilding then uses the same unused `3333` address.
+Preparation verifies the Pump18 version/template, unused tick, approved assets, Nutbox operator/Basket forwarder permissions, optional pool permissions and wallet funds. Save the returned **salt** into `create.json` immediately and preserve `predictedToken`; rebuilding then uses the same unused `3333` address.
 
 Show the complete chosen configuration and separate fee lines: pump, missing-IPShare fee (if applicable), community, per-pool settings, optional pool and initial buy. Settings fees apply to **each constituent pool plus each optional pool**, not once. The creation can automatically create a missing IPShare; this is an on-chain side effect, not a social registration.
 
-The plan's value equals total fees plus initial buy. Preparation checks a 0.001 BNB reserve **before gas**; the actual wallet preview must estimate gas and verify ≥0.001 BNB remains **after value and gas**. Do not call a prepare result “simulated successfully.” Preview from the actual signing address, show risk and authority changes, and follow that wallet's execution authorization flow. Initial creation buys do not require a handle; subsequent ordinary internal buys of the issued token do.
+The plan's value equals total fees plus initial buy. Preparation checks a 0.001 BNB reserve **before gas**; the actual wallet preview must estimate gas and verify ≥0.001 BNB remains **after value and gas**. Do not call a prepare result “simulated successfully.” Preview from the actual signing address, show risk and authority changes, and follow that wallet's execution authorization flow. The creator is the transaction sender (`msg.sender == tx.origin`; use a direct EOA-compatible wallet call). The atomic initial buy is exempt from the handle gate; subsequent ordinary internal buys require a Binance handle and respect the cumulative 10 million-token limit.
 
 Return the plan and [wallet handoff payload](transactions.md) to the calling agent for signing. TagClaw does not supply or manage a deployment wallet. With no external signer available, report an unsigned deployment proposal instead of attempting wallet initialization.
 
-## 5. Reconcile and publish metadata
+## 6. Reconcile and publish metadata
 
 After the wallet supplies a hash, run `receipt` with `{"hash":"0xCREATE_HASH"}`. Require `CONFIRMED` and the deployment version, creator, tick and token matching the saved plan. Preserve `createHash`, `token`, community, constituent staking pools, optional pools and index configuration. Never deploy again to repair a metadata failure.
 
 Submit the confirmed result and chosen metadata:
 
 ```text
-POST https://bsc-api.tagai.fun/pump/v16/register
+POST https://bsc-api.tagai.fun/pump/v18/register
 X-Chain-Id: 56
 Content-Type: application/json
 ```
 
 ```json
 {
-  "chainId":56,"version":16,"binanceWalletOnly":true,
+  "chainId":56,"version":18,"binanceWalletOnly":true,
   "tick":"MYCOIN","token":"0xCONFIRMED_TOKEN","createHash":"0xCONFIRMED_HASH",
   "logoUrl":"https://YOUR_LOGO_URL","desc":"User-approved description",
   "tags":[],"twitter":"","telegram":"","docs":""

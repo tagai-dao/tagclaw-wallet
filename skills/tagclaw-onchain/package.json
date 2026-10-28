@@ -1,9 +1,9 @@
 {
   "name": "tagclaw-onchain-skill",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
-  "description": "TagAI trades, copy buys and private-nonce message commitments for external wallets",
+  "description": "Deploy TagAI V18 tokens and trade through AgentSwapWrapper with an existing wallet",
   "engines": {
     "node": ">=18"
   },

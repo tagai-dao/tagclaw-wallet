@@ -1,3 +1,4 @@
+import { agentTrade, automaticIPShare } from './agent-swap.mjs'
 import { ethers } from 'ethers'
 import * as D from './deployment.mjs'
 import { call, MULTICALL_ABI } from './snapshot.mjs'
@@ -120,6 +121,11 @@ export async function trade(snapshot, input) {
       const [handle] = await snapshot.read([call(D.HANDLE_REGISTRY, HANDLE_ABI, 'handleOf', [from])])
       if (handle.length === 0) throw new Error(`V${state.version}_HANDLE_NOT_REGISTERED: this address needs a Binance Wallet handle for an ordinary curve buy; no TagAI account registration is needed`)
     }
+    let autoShare = null
+    if (state.version >= 18) {
+      const [ipshare] = await snapshot.read([call(state.pump, PUMP14_ABI, 'getIPShare')])
+      autoShare = await automaticIPShare(snapshot, from, ipshare)
+    }
     let expected
     if (isBuy) {
       const [a, b] = state.fees
@@ -143,37 +149,13 @@ export async function trade(snapshot, input) {
     if (expected <= 0n || minimum <= 0n) throw new Error('ZERO_OUTPUT')
     return plan(snapshot, from, `v${state.version}-curve-${input.side}`, token, TOKEN14_ABI, isBuy ? 'buyToken' : 'sellToken',
       isBuy ? [contractExpected, sellsman, actualBps] : [amount, contractExpected, sellsman, actualBps], isBuy ? amount : 0n,
-      { token, ipshareSubject:sellsman, quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
+      { token, ipshareSubject:sellsman, ...(autoShare ? { automaticIPShare: autoShare } : {}), quote: { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }, rebuildAfterConfirmation: false })
   }
   return v4Trade(snapshot, input, state)
 }
 
 export async function v4Trade(snapshot, input, state) {
-  const from = address(input.from, 'from'), token = address(input.token, 'token')
-  const isBuy = input.side === 'buy', amount = uint(input.amount, 'amount'), bps = slippage(input.slippageBps)
-  const sellsman = input.sellsman ? address(input.sellsman, 'sellsman') : ethers.ZeroAddress
-  if (amount > U128) throw new Error('V4_AMOUNT_OVERFLOW')
-  const key = await poolKey(snapshot, token, state.poolId)
-  const hook = sellsman === ethers.ZeroAddress ? '0x' : coder.encode(['address'], [sellsman])
-  const [[expected]] = await snapshot.read([call(D.QUOTER, PCS_QUOTER_ABI, 'quoteExactInputSingle', [[key, isBuy, amount, hook]])])
-  const minimum = expected * BigInt(10000 - bps) / 10000n
-  if (expected <= 0n || minimum <= 0n || minimum > U128) throw new Error('V4_INVALID_OUTPUT')
-  const quote = { amountIn: String(amount), expectedOut: String(expected), minimumOut: String(minimum), slippageBps: bps }
-  if (!isBuy) {
-    const [allowance, permission] = await snapshot.read([
-      call(token, TOKEN_ALLOWANCE_ABI, 'allowance', [from, D.PERMIT2]),
-      call(D.PERMIT2, PERMIT2_ABI, 'allowance', [from, token, D.ROUTER])
-    ])
-    const detail = { quote, rebuildAfterConfirmation: true, next: 'Wait for status=1 receipt, then rerun prepare-trade with the same request to get a fresh quote and next transaction.' }
-    if (allowance < amount) return plan(snapshot, from, allowance > 0n ? 'reset-permit2-allowance' : 'approve-permit2', token, TOKEN_ALLOWANCE_ABI, 'approve', [D.PERMIT2, allowance > 0n ? 0n : amount], 0n, detail)
-    if (permission[0] < amount || permission[1] <= BigInt(snapshot.block.timestamp + 300)) return plan(snapshot, from, 'approve-router-in-permit2', D.PERMIT2, PERMIT2_ABI, 'approve', [token, D.ROUTER, amount, snapshot.block.timestamp + 3600], 0n, detail)
-  }
-  const swap = coder.encode([`(${POOL_KEY_TYPE},bool,uint128,uint128,bytes)`], [[key, isBuy, amount, minimum, hook]])
-  const payload = coder.encode(['bytes', 'bytes[]'], ['0x060c0f', [swap,
-    coder.encode(['address', 'uint128'], [isBuy ? key.currency0 : key.currency1, amount]),
-    coder.encode(['address', 'uint128'], [isBuy ? key.currency1 : key.currency0, minimum])]])
-  return plan(snapshot, from, `v${state.version}-v4-${input.side}`, D.ROUTER, PCS_ROUTER_ABI, 'execute', ['0x10', [payload], snapshot.block.timestamp + 300], isBuy ? amount : 0n,
-    { token: input.token, ipshareSubject:sellsman, poolId: state.poolId, quote, rebuildAfterConfirmation: false })
+  return agentTrade(snapshot, input, { ...state, token: input.token })
 }
 
 export const IPSHARE_QUOTE_ABI = [

@@ -10,14 +10,14 @@ test('public API uses fixed origin, explicit BSC chain, GET only and correct per
   const requests = []
   const api = new PublicApi(async (url, options) => {
     requests.push({ url, options })
-    return response(url.pathname.startsWith('/pump/') ? { c: 0, d: { version: 16, assets: [] } } : false)
+    return response(url.pathname.startsWith('/pump/') ? { c: 0, d: { version: 18, assets: [] } } : false)
   })
   const available = await api.get('tick-available', { tick: 'A&B' })
   assert.equal(available.data, false)
   assert.equal(requests[0].url.searchParams.get('tick'), 'A&B')
   const config = await api.get('creation-options', { from: token })
-  assert.equal(config.data.version, 16)
-  assert.equal(requests[1].url.pathname, `/pump/v16/creation/${token}`)
+  assert.equal(config.data.version, 18)
+  assert.equal(requests[1].url.pathname, `/pump/v18/creation/${token}`)
   for (const request of requests) {
     assert.equal(request.url.origin, 'https://bsc-api.tagai.fun')
     assert.equal(request.options.method, 'GET')

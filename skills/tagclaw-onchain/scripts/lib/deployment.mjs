@@ -1,4 +1,4 @@
-// BSC deployment aligned with tagclaw-wallet/src/constants.js.
+// BSC deployment profiles from TagAI-contract-V2 deployment records.
 export const CHAIN_ID = 56
 export const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11'
 export const PUMP = '0xcd4e721Fc418f4D723C04c71e8d8EcCb75C3CD34'
@@ -29,6 +29,7 @@ export const PROFILES = {
   14: { version: 14, pump: PUMP, implementation: IMPLEMENTATION },
   15: { version: 15, pump: PUMP15, implementation: IMPLEMENTATION15 },
   16: { version: 16, pump: '0xee8D16f44c89B5F858e223Ab77c6091E184AaDf8', implementation: '0x2eD2ac896392f2C1a4585da277c2095E2C975583' },
+  18: { version: 18, pump: '0x3B174dB24A44d7172C1f4Fb8Ab387F3931681C24', implementation: '0x02DC3D9bd600C147F347e584167b58953353BDbF' },
   17: { version: 17, pump: '0x01B2308653c7e371B28A862444a40c12ca18b353', implementation: '0x309E55BB49cE073227F8a2F67bE659dFeA3d691f' }
 }
 export const LEGACY_PUMPS = {
@@ -51,3 +52,5 @@ export const IMPORT_WRAPPER = '0x72D353c0469C10F6B769F13b67EEdB2E1F26FB01'
 export const IMPORTED_SWAP = '0xDfFc699FB095a693708E3c15e6F0a224cbbCc98F'
 export const V3_ROUTER = '0x13f4EA83D0bd40E75C8222255bc855a974568Dd4'
 export const V3_QUOTER = '0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997'
+
+export const AGENT_SWAP = '0x3F7146D3D234Ed4C2021DE1A5B14da8754e6C577'

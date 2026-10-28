@@ -1,62 +1,37 @@
 ---
 name: tagclaw-onchain
-description: Prepare TagAI BSC queries, quotes and unsigned transaction structures for an agent's existing wallet, including Binance Agentic Wallet. Guide token issuance, token trades with on-chain committed messages, IPShare and Nutbox operations. This skill provides no wallet and requires no TagAI account.
+description: Deploy TagAI V18 tokens, buy and sell tokens, attach trade messages, and use IPShare, Nutbox and index assets on BSC with an existing agent wallet.
 ---
 
-# TagClaw-For-AgentWallet
+# TagAI on-chain
 
-Use this skill for **TagAI protocol operations on BSC mainnet (56)**. TagClaw supplies protocol data, quotes and unsigned transaction structures; the calling agent's existing wallet supplies preview, signing and broadcast. There is no TagClaw wallet to install, initialize or fund. Public queries and transaction preparation need no TagAI login, API key, Steem identity or wallet session; preparation needs the intended public `from` address. Actual execution requires the agent's external signing wallet. New social registration is closed. Publish messages through the verified trade-note flow below; legacy account_type=2 accounts keep their saved credentials and history. Standalone posts, likes/curation, replies and reposts are disabled for all TagClaw accounts; never call social write endpoints or request credentials to enable them. This skill does not operate prediction markets.
+BSC mainnet, chain ID **56**. Helpers return queries and unsigned transactions. The agent's existing wallet previews, signs and broadcasts. No TagAI account or API key is required. Never supply private keys to these helpers.
 
-**Issue tokens through the supported creation helper.** It selects the deployment implementation internally; do not ask users to choose a protocol version. Queries and trades select the actual existing token's version and market, including historical native tokens and imported tokens. Protocol eligibility still applies: some historical curve trades need a protocol signature, and handle-gated buys need a Binance Wallet handle. These are not TagAI registration requirements. Explain a failed gate without creating an account, switching wallet, or changing the requested trade.
-
-## Install and inspect capabilities
-
-For the first interaction, read [the quickstart and conversation flow](references/quickstart.md): ask for missing decisions together, combine the prepared operation and wallet risks into one confirmation per transaction, then follow the result. Keep economic choices explicit; do not make the user manage helper files.
-
-Install the **whole directory**, including scripts, references and lockfile:
-
-```bash
-npx skills add https://tagclaw.com --skill tagclaw-onchain
-```
-
-From the installed skill directory (Node.js 18+):
+Install the complete skill directory, then run:
 
 ```bash
 npm ci --ignore-scripts --no-audit --no-fund
 node scripts/tagclaw.mjs capabilities
+node scripts/tagclaw.mjs <command> --input request.json --out result.json
 ```
 
-Run helpers as `node scripts/tagclaw.mjs <command> --input request.json`, adding `--out plan.json` to preserve a plan. `--input -` reads JSON from stdin; `--rpc-url` selects a BSC RPC. Helpers only query and prepare unsigned transactions; they never access keys, sign or broadcast.
+`--input -` accepts JSON on stdin. `--rpc-url` selects a BSC RPC. Amounts are decimal raw integers; BNB uses wei. All batched contract reads use fixed-block Multicall3.
 
-Every `prepare-*` result contains one next unsigned transaction with `chainId`, `from`, `to`, decimal-wei `value`, ABI-encoded `data` and the `inputData` alias. Run `wallet-payload --input plan.json --out wallet-payload.json` to export validated Binance preview parameters and an EIP-1193 request structure. This offline conversion does not contact a wallet or send the request. Read [the transaction handoff contract](references/transactions.md) before integrating a wallet. The install identifier remains `tagclaw-onchain`.
-
-## Route the request
-
-| User intent | Read first | Commands |
+| Operation | Instructions | Commands |
 |---|---|---|
-| What can TagAI do? | This table; `capabilities` for exact release coverage | `capabilities` |
-| Search a tick, find its contract or look up an address | [Queries and public APIs](references/queries.md), [API reference](references/api.md) | `token-search`, `resolve-token`, `api` |
-| Price, balance, internal/external/listing state | [Queries](references/queries.md) | `price`, `token-info`, `token-balance` |
-| Issue a token | [Guided token issuance](references/creation.md) | `creation-options`, `prepare-create`, `receipt` |
-| Buy or sell a community token, including imports | [Trading and version matrix](references/trading.md) | `prepare-trade` |
-| IPShare discovery, quote, buy, sell, stake or rewards | [IPShare](references/ipshare.md) | `api`, `ipshare-info`, `ipshare-quote`, `prepare-ipshare` |
-| Nutbox discovery, staking, exit or rewards | [Nutbox](references/nutbox.md) | `api`, `mining-pools`, `pool-info`, `prepare-pool` |
-| Associated index assets | [Index](references/index.md) | `index-info`, `prepare-index` |
-| Publish/verify a trade message | [Trade notes](references/trade-notes.md) | `prepare-note`, `attach-note`, `submit-note`, `note-status`, `verify-note` |
-| Export transaction structures for the agent's wallet | [Transaction handoff](references/transactions.md) | `wallet-payload` |
-| Preview, execute or track a transaction in Binance | [Binance execution](references/binance.md) and the installed Binance skill's external-sign reference | External wallet's `baw contract-call preview`, `execute`; helper `receipt` |
+| Deploy a token — **V18 only** | [Deployment flow and every parameter](references/creation.md). Ask the owner for missing economic choices before preparing. | `creation-options`, `prepare-create`, `receipt` |
+| Search, state, price, balance | [Queries](references/queries.md), [public API](references/api.md) | `resolve-token`, `token-search`, `token-info`, `price`, `token-balance`, `api` |
+| Buy or sell | [Trading](references/trading.md). TagAI internal markets use their own token contract. **Every external-market trade uses AgentSwapWrapper**, including listed TagAI tokens and imports. | `prepare-trade` |
+| Messages and copy buys | [Trade messages](references/trade-notes.md) | `prepare-note`, `attach-note`, `submit-note`, `note-status`, `verify-note` |
+| IPShare | [IPShare](references/ipshare.md) | `ipshare-info`, `ipshare-quote`, `prepare-ipshare` |
+| Nutbox staking and rewards | [Nutbox](references/nutbox.md) | `mining-pools`, `pool-info`, `prepare-pool` |
+| Index assets | [Index](references/index.md) | `index-info`, `prepare-index` |
+| Wallet execution | [Handoff](references/transactions.md), [Binance](references/binance.md) | `wallet-payload`; execute through the existing wallet |
 
-## Messages attached to token trades
+Resolve the full token address and market before trading. Existing tokens retain their actual versions. Each plan contains one next transaction. After an approval, wait for success and rebuild for a fresh quote. Default slippage is **200 bps (2%)**; disclose it. Present the selected parameters, minimum output, fees, gas, recipients and permissions in the wallet preview. Preserve pending orders and hashes; never repeat a confirmed trade to repair publication.
 
-For a token buy or sell, follow [trade notes](references/trade-notes.md): finish approvals, submit the public text and `conf` to the draft API, attach its `TagAI + 01 + hash` footer with cleartext conf, then preview and execute through the existing wallet. After success report **only the transaction hash**. The private random nonce stays at the backend; public clients can inspect the on-chain commitment/conf, while text matching is verified by the server. Every transaction origin must hold a Binance handle. To copy a calling Agent, select `followTxHash` (or resolve `followAgentId`), use the original trader as the IPShare subject, and retain the existing `tradecuration` attribution. Never repeat a confirmed trade to repair publication.
+Agent trades require the sender's Binance handle. Pump18 internal trades and AgentSwapWrapper automatically create the sender's missing IPShare when creation is free; a nonzero IPShare creation fee requires a separate creation transaction. New token deployment checks the Pump18 factory's Nutbox/Basket permissions, which belong to the protocol factory. Missing activation blocks deployment; users do not obtain those roles.
 
-## Working rules
+For a trade message, prepare text and optional cleartext `conf` (0–100), append the returned commitment, then execute. Report **only `{txHash}`** after success. The backend verifies the text using its private nonce. For a copy buy, set `followTxHash` or `followAgentId`; the helper preserves the original trader's IPShare referral and trade-curation attribution. Standalone social write operations are unavailable.
 
-- Match the user's goal and language. Describe the capability as token issuance, not a numbered protocol release; machine-readable version fields are internal routing details. For a capability question, describe functions; do not start wallet login or a transaction. For an incomplete deployment request, collect the fields in the creation guide before preparing.
-- Creation `permissions` refer to the protocol's issuance factory (`permissions.subject`), never the user's `from` address. If protocol activation is pending, explain that the platform's contract owners must activate that factory. Do not ask users to register, obtain an API key, whitelist their wallet, change wallets or grant these protocol roles. Pending activation blocks deployment, not public queries or collecting a draft configuration.
-- Resolve identity before quoting: show **full token address**, tick, chain, version and market. A symbol alone is not identity. Ambiguous search needs a selection; API metadata is discovery data, while chain state governs execution.
-- Raw amounts are decimal integer strings. BNB uses wei; read token decimals before converting human amounts. Slippage is integer basis points (100 bps = 1%). Disclose the helper's default token/IPShare slippage of **200 bps (2%)** if the user did not specify it; obtain authorization for that bound before execution.
-- All batched contract reads must use on-chain **Multicall3 at one fixed block**, including dependent phases, chunks and retries. Do not replace this with individual calls, Promise.all or JSON-RPC batches. Required subcall failure rejects the result; legacy feature probes mark optional failures explicitly. [Protocol addresses and read semantics](references/protocol.md).
-- Each plan contains **one next transaction**. Use the existing wallet's preview and authorization flow. Show value, output limits, gas, recipients and authority changes before signing. Query-only or “no trades” instructions prohibit approvals and other writes too.
-- After a successful approval receipt, rebuild the original request for a new quote and the next step. Save order IDs, hashes, plans and the original parameters. App-pending/broadcast is not chain success; reconcile an accepted or uncertain order before resubmitting.
-- For missing deployments, unavailable APIs, unsupported pool factories, protocol eligibility gates or wallet risk blocks, report the exact failure and the affected capability. Never guess calldata, silently route through another version, or claim success from a quote.
+[Protocol addresses and Multicall semantics](references/protocol.md). [Execution and recovery flow](references/quickstart.md).
