@@ -4,20 +4,97 @@ This reference uses the official `baw` CLI. Keep the installed Binance Agentic W
 
 This is an adapter for the **calling agent's external Binance wallet**, not a wallet included with TagClaw-For-AgentWallet. `wallet-payload --input plan.json` exports `walletRequests.binance.parameters` for this adapter. Another wallet can instead use the [normalized transaction or EIP-1193 request](transactions.md); it does not need `baw` just to prepare a plan.
 
-## Check the selected wallet
+## Check before an intended transaction
+
+Pure queries, prices and unsigned-plan-only requests need none of these checks.
+For an intended deployment, buy/sell, stake, claim or index operation, check early
+and recheck immediately before preview:
 
 ```bash
+node scripts/tagclaw.mjs wallet-check
+```
+
+Optional input selects the operation and checks the requested sender:
+
+```json
+{"operation":"trade","from":"0xPUBLIC_BSC_ADDRESS"}
+```
+
+`trade` is the default and includes Agent ID eligibility. Use `create`, `ipshare`,
+`nutbox` or `index` for those operations; they do not add a token-trade handle gate.
+The command runs only these official read commands, with `--json`:
+
+```bash
+baw cli-check --required-version 1.12.0 --json
 baw wallet status --json
 baw wallet address --json
 baw wallet settings --json
 baw wallet tx-lock --binanceChainId 56 --json
+baw wallet agent-id --json   # token trades only
 ```
 
-Require status `CONNECTED`. Read `data.addresses[]` and select the entry whose `binanceChainId` is `"56"`; its `address` is the helper request's `from`. If disconnected, use the wallet's existing connection flow. Changing providers or initializing a local TagClaw wallet does not repair a Binance session.
+| Check | Required interpretation / fix |
+|---|---|
+| CLI missing or too old | Install/update the official skill and `@binance/agentic-wallet` CLI below; don't install a local TagClaw signing wallet. |
+| Connection | Require `CONNECTED`; `UNCONNECTED` needs sign-in, `CREATING` needs wallet creation to finish. The CLI status is authoritative. |
+| Sender | Select `data.addresses[]` entry with `binanceChainId:"56"`. Its full address must equal the intended `from`; resolve a mismatch with the owner and rebuild. |
+| Session | `sessionExpireTime` must be in the future; reconnect if expired. |
+| Developer Mode | Require `devMode.enabled:true` and future Unix-seconds `devMode.expiresAt` before external-call preview. |
+| Developer limits | Inspect `devMode.balanceExceeded`, `devMode.dailyLimit` and **`developerModeQuotaUsed`**, not DeFi/general usage. Limits are USD, not BNB/wei; preview determines the actual spend. |
+| Token permissions | Inspect `tradeAllTokens`. `true` permits arbitrary-token scope. `false` means restricted scope: tell the owner new/unlisted tokens may be disallowed, and let them retain the allowed-token scope or explicitly enable **Trade all tokens**. It does not mean every token is rejected. |
+| Risk policy | Report `abnormalTxnHandling` (`AutoReject` / `NeedConfirmation`) when relevant; retain the owner's choice. Never switch rejection to confirmation automatically. |
+| Pending lock | Require `UNLOCKED`. Reconcile the existing transaction/App confirmation when `LOCKED`; don't create a duplicate order. |
+| Agent ID | For token trades require `wallet agent-id` to report `claimed:true`. A service error is unknown eligibility, not proof that no handle exists. The protocol still verifies the actual sender's on-chain handle. |
 
-Custom calls require `devMode.enabled`. Developer Mode, its expiry and quota are controlled in the Binance App. If disabled, expired, over quota or risk-blocked, report the returned reason; the agent cannot loosen these settings. Check `sessionExpireTime` too. If `wallet tx-lock` reports `LOCKED`, reconcile the pending on-chain transaction or App confirmation before creating another order.
+The helper prints only selected status fields, not raw wallet/session output.
+`BLOCKED`/`canPreview:false` means fix the reported issue before wallet preview.
+`POLICY_REVIEW` means token scope is restricted/unknown; resolve the owner's
+policy before execution. If the owner retains a narrower policy, use only permitted tokens; a valid wallet
+preview may establish whether the intended token is permitted; do not demand a
+wallet-wide permission expansion. `READY_FOR_PREVIEW` is not authorization or a
+promise that the transaction will pass simulation. Every trade still needs the
+wallet's actual preview and authorization. These settings are separate from
+ERC20/Permit2 allowances and Binance handle ownership.
 
-These checks apply when a wallet operation is requested. Public TagAI discovery, prices and capability descriptions do not need wallet login or Developer Mode. Use TagAI's prepared contract call for protocol trades; a generic Binance DEX swap is not a replacement for the selected bonding-curve, IPShare or Nutbox operation.
+## Guide missing setup
+
+Install the official wallet skill and required CLI in the **agent's execution
+environment**, with the owner's authorization:
+
+```bash
+npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
+npm install -g @binance/agentic-wallet@1.12.0
+```
+
+Read that installed skill for its current version requirements. If it requires a
+newer CLI, follow it rather than downgrading an existing newer installation.
+
+If there is no Agentic Wallet yet, the owner creates one in the Binance App.
+For a disconnected existing wallet, follow the official sign-in flow:
+
+```bash
+baw auth signin --json
+baw auth verify --qrCodeId <actual-returned-qrCodeId> --json
+baw wallet status --json
+```
+
+Display the returned `pairingCode` and `urlForWeb` exactly as returned. The owner
+opens that link and approves in the Binance App. Keep `auth verify` running until
+it completes or times out; an expired QR needs a fresh sign-in. Recheck CLI status
+instead of assuming the App's success screen means the agent is connected.
+Never copy login/session tokens into TagClaw files or API requests.
+
+Settings can only be changed by the owner in **Binance App → Agentic Wallet
+management → Settings**. For Developer Mode, the owner enables it, reviews the
+risk warning and approves the App signature prompt. Report the actual balance
+cap/quota failure if refused; do not invent a fixed cap. For arbitrary token
+trading, explain **Trade all tokens** and let the owner choose the required scope.
+Re-run settings/preflight after configuration. For an unclaimed trading handle,
+guide **Binance App → Web3 wallet → Agent ID** and recheck after confirmation.
+
+Never enable permissions, loosen limits/risk controls, sign in or broadcast just
+because a query was requested. Use TagAI's prepared contract call; a generic
+Binance market swap does not replace the selected protocol operation.
 
 ## Preview the prepared transaction
 
@@ -89,8 +166,11 @@ node scripts/tagclaw.mjs receipt --input receipt.json
 
 If `rebuildAfterConfirmation` was true, only an authorization was prepared. After its status-1 receipt rerun the original prepare request; review and authorize the next step separately. This includes reset-to-zero approval, exact ERC20 approval and Permit2 approval.
 
-Official references, reviewed 2026-10-21:
+Official references:
 
+- [Official preflight](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/preflight.md)
+- [Authentication](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/authentication.md)
+- [Agent ID status](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/agent-id-claim-status.md)
 - [External contract calls](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/external-sign.md)
 - [Wallet addresses and pending-transaction locks](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/wallet-view.md)
 - [Security settings and expiry](https://github.com/binance/binance-skills-hub/blob/main/skills/binance-web3/binance-agentic-wallet/references/wallet-setting.md)

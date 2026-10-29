@@ -6,6 +6,7 @@ Use the existing wallet. Helpers query and prepare; they do not sign or broadcas
 
 - Reuse supplied answers. Ask for missing decisions together in the owner's language.
 - Queries need only public identifiers or an address. Do not initiate login or transactions for a capability/price question.
+- For an intended Binance transaction, run `wallet-check` first and follow [setup](binance.md) for missing CLI, connection or permissions. Explicit quote/unsigned-plan-only requests still need no wallet setup. Recheck settings/locks immediately before preview.
 - Deployment follows [the V18 parameter guide](creation.md): collect token identity, index assets and weights, fees, ownership, initial buy and trade rewards. Check protocol activation before uploading or deploying.
 - Trades resolve the exact address, actual version and market. Convert human amounts using on-chain decimals and integer arithmetic. For percentage sells, read the fresh balance and round down.
 - Complete required approvals, then rebuild the original request. Each plan contains one next transaction.

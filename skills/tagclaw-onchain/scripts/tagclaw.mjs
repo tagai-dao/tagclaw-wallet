@@ -11,8 +11,9 @@ import { PublicApi, API_RESOURCES, resolveToken } from './lib/api.mjs'
 import { legacyState, legacyTrade, legacyPrice } from './lib/legacy.mjs'
 import { walletPayload } from './lib/wallet-payload.mjs'
 import { TradeNotesApi,attachNote,attachFollow,verifyPublishedNote } from './lib/trade-notes.mjs'
+import { walletCheck } from './lib/wallet-check.mjs'
 
-const commands = ['prepare-note','attach-note','submit-note','note-status','verify-note','capabilities', 'wallet-payload', 'api', 'resolve-token', 'token-search', 'creation-options', 'deployments', 'price', 'token-info', 'token-balance', 'index-info', 'prepare-index', 'mining-pools', 'prepare-trade', 'prepare-create', 'ipshare-info', 'ipshare-quote', 'prepare-ipshare', 'pool-info', 'prepare-pool', 'receipt']
+const commands = ['wallet-check','prepare-note','attach-note','submit-note','note-status','verify-note','capabilities', 'wallet-payload', 'api', 'resolve-token', 'token-search', 'creation-options', 'deployments', 'price', 'token-info', 'token-balance', 'index-info', 'prepare-index', 'mining-pools', 'prepare-trade', 'prepare-create', 'ipshare-info', 'ipshare-quote', 'prepare-ipshare', 'pool-info', 'prepare-pool', 'receipt']
 const json = value => JSON.stringify(value, (_, value) => typeof value === 'bigint' ? String(value) : value)
 async function main() {
   const [command, ...args] = process.argv.slice(2)
@@ -29,7 +30,8 @@ async function main() {
   let output
   const api = new PublicApi()
   const notes = new TradeNotesApi()
-  if (command === 'capabilities') output = { title: 'TagClaw-For-AgentWallet', chainId: 56, walletIncluded: false, signsTransactions: false, broadcastsTransactions: false, registrationRequired: false, publicTradeNotes: true, createVersions: [18], nativeTokenVersions: [...Object.keys(deployment.LEGACY_PUMPS), ...Object.keys(deployment.PROFILES)].map(Number), importDexVersions: [2, 3, 4], externalTradeWrapper: deployment.AGENT_SWAP, commands, publicResources: Object.keys(API_RESOURCES), limitations: ['Legacy v5 buys and v8 curve trades require protocol eligibility signatures', 'Handle-gated curve buys require a Binance Wallet handle', 'Unknown Nutbox factories require an explicit adapter; never infer calldata', 'No social account registration or prediction markets'] }
+  if (command === 'capabilities') output = { title: 'TagClaw-For-AgentWallet', chainId: 56, walletIncluded: false, signsTransactions: false, broadcastsTransactions: false, registrationRequired: false, publicTradeNotes: true, walletPreflight: true, createVersions: [18], nativeTokenVersions: [...Object.keys(deployment.LEGACY_PUMPS), ...Object.keys(deployment.PROFILES)].map(Number), importDexVersions: [2, 3, 4], externalTradeWrapper: deployment.AGENT_SWAP, commands, publicResources: Object.keys(API_RESOURCES), limitations: ['Legacy v5 buys and v8 curve trades require protocol eligibility signatures', 'Handle-gated curve buys require a Binance Wallet handle', 'Unknown Nutbox factories require an explicit adapter; never infer calldata', 'No social account registration or prediction markets'] }
+  else if (command === 'wallet-check') output = await walletCheck(input)
   else if (command === 'prepare-note') output = await notes.prepare(input)
   else if (command === 'attach-note') output = attachNote(input)
   else if (command === 'submit-note') output = await notes.submit(input)

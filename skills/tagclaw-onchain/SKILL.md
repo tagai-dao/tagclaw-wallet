@@ -17,8 +17,17 @@ node scripts/tagclaw.mjs <command> --input request.json --out result.json
 
 `--input -` accepts JSON on stdin. `--rpc-url` selects a BSC RPC. Amounts are decimal raw integers; BNB uses wei. All batched contract reads use fixed-block Multicall3.
 
+## Wallet readiness
+
+Public queries, prices, capabilities and unsigned-plan-only requests work without wallet installation, login or Developer Mode. Do not start wallet setup for these requests.
+
+For an intended Binance transaction, run `node scripts/tagclaw.mjs wallet-check` **before preparing the transaction**, and recheck immediately before wallet preview. Optional input: `{"operation":"trade","from":"0xPUBLIC_BSC_ADDRESS"}`; operations are `trade` (default), `create`, `ipshare`, `nutbox`, `index`.
+
+Check CLI installation/version, connection, BSC sender, session expiry, Developer Mode/expiry/quota, Trade all tokens policy, pending lock and (for token trades) Agent ID. Explain missing setup with the fix in [Binance setup](references/binance.md). The owner installs/connects and confirms App settings; never change permissions automatically. A restricted token policy requires review, not an assertion that every token is blocked. Passing preflight is not transaction authorization.
+
 | Operation | Instructions | Commands |
 |---|---|---|
+| Check Binance wallet setup | [Installation, connection and permissions](references/binance.md) | `wallet-check` (read-only) |
 | Deploy a token — **V18 only** | [Deployment flow and every parameter](references/creation.md). Ask the owner for missing economic choices before preparing. | `creation-options`, `prepare-create`, `receipt` |
 | Search, state, price, balance | [Queries](references/queries.md), [public API](references/api.md) | `resolve-token`, `token-search`, `token-info`, `price`, `token-balance`, `api` |
 | Buy or sell | [Trading](references/trading.md). TagAI internal markets use their own token contract. **Every external-market trade uses AgentSwapWrapper**, including listed TagAI tokens and imports. | `prepare-trade` |
